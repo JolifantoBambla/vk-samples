@@ -1,2 +1,2 @@
 # vk-samples
-Samples for vk (Common Lisp/CFFI bindings for the Vulkan API).
+Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindings for the Vulkan API).

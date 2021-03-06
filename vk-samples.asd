@@ -9,6 +9,9 @@
   :depends-on (#:vk)
   :components ((:file "package")
                (:module "samples"
-                :components ((:module "01-init-instance"
-                              :components ((:file "01-init-instance")))))
+                :components ((:file "utils")
+                             (:module "01-init-instance"
+                              :components ((:file "01-init-instance")))
+                             (:module "02-enumerate-devices"
+                              :components ((:file "02-enumerate-devices")))))
                (:file "vk-samples")))

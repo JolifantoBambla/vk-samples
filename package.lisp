@@ -7,4 +7,6 @@
   (:use #:cl)
   (:export
    #:*api-version*
-   #:01-init-instance))
+   #:create-instance
+   #:01-init-instance
+   #:02-enumerate-devices))

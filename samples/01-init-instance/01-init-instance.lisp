@@ -2,8 +2,6 @@
 
 (in-package #:vk-samples/samples)
 
-(defparameter *api-version* (vk:pack-version-number 1 2 153))
-
 (defun 01-init-instance (&optional (app-name "01-init-instance") (engine-name "vk"))
   (let* ((application-info (make-instance 'vk:application-info
                                           :application-name app-name

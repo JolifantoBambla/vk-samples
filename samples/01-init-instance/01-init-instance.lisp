@@ -1,6 +1,6 @@
 ;;;; 01-init-instance.lisp
 
-(in-package #:vk-samples/samples)
+(in-package #:vk-samples/01-init-instance)
 
 (defun 01-init-instance (&optional (app-name "01-init-instance") (engine-name "vk"))
   (let* ((application-info (make-instance 'vk:application-info

@@ -25,8 +25,7 @@
                    (vk:enumerate-instance-extension-properties))
           ()
           "Could not find the ~a extension." vk:+ext-debug-utils-extension-name+)
-  (with-instance (instance app-name engine-name nil (list vk:+ext-debug-utils-extension-name+
-                                                          vk:+ext-debug-report-extension-name+))
+  (with-instance (instance app-name engine-name nil (list vk:+ext-debug-utils-extension-name+))
     ;; supply the default extension loader with our instance
     (setf vk:*default-extension-loader* (vk:make-extension-loader :instance instance))
     ;; set up the create info

@@ -13,4 +13,4 @@ Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindin
 | create-debug-utils-messenger | Shows how to create and destroy a debug callback. |
 
 ## Acknowledgements
-The samples in this repository closely follow the samples for the [Vulkan SDK by LunarG](https://github.com/LunarG/VulkanSamples) as well as the samples for [Vulkan-Hpp](https://github.com/KhronosGroup/Vulkan-Hpp).
+The samples in this repository closely follows the [VulkanSamples by LunarG](https://github.com/LunarG/VulkanSamples) as well as the samples for [Vulkan-Hpp](https://github.com/KhronosGroup/Vulkan-Hpp).

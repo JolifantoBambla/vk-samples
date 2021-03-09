@@ -4,7 +4,7 @@
 
 ;; this function will actually log 
 (defun debug-utils-messenger (flags message-types callback-data user-data)
-  (format t "[~a] (~a): ~a; user-data: ~a~%"
+  (format t "[~a] ~a: ~a; user-data: ~a~%"
           flags message-types (vk:message callback-data) user-data))
 
 (cffi:defcallback debug-messenger-callback %vk:bool32 ((flags %vk:debug-utils-message-severity-flag-bits-ext)

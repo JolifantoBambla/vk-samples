@@ -6,7 +6,9 @@
    #:*api-version*
    #:with-instance
    #:with-device
-   #:with-instance-and-device))
+   #:with-instance-and-device
+   #:define-debug-utils-messenger-callback
+   #:default-debug-utils-log-callback))
 
 (defpackage #:vk-samples/01-init-instance
   (:documentation "Shows how to create and destroy a Vulkan instance.")

@@ -36,6 +36,13 @@
   (:export
    #:04-init-command-buffer))
 
+(defpackage #:vk-samples/create-debug-utils-messenger
+  (:documentation "Shows how to create and destroy a debug callback.")
+   (:use #:cl
+        #:vk-samples/utils)
+  (:export
+   #:create-debug-utils-messenger))
+
 (defpackage #:vk-samples
   (:documentation "Usage samples for the Vulkan bindings provided by VK.")
   (:use #:cl)
@@ -47,8 +54,11 @@
                 #:03-init-device)
   (:import-from #:vk-samples/04-init-command-buffer
                 #:04-init-command-buffer)
+  (:import-from #:vk-samples/create-debug-utils-messenger
+                #:create-debug-utils-messenger)
   (:export
    #:01-init-instance
    #:02-enumerate-devices
    #:03-init-device
-   #:04-init-command-buffer))
+   #:04-init-command-buffer
+   #:create-debug-utils-messenger))

@@ -4,14 +4,16 @@
 
 (defparameter *api-version* (vk:make-api-version 1 2 153))
 
-(defmacro with-instance ((instance &optional (app-name "sample-app") (engine-name "vk")) &body body)
+(defmacro with-instance ((instance &optional (app-name "sample-app") (engine-name "vk") (layer-names nil) (extension-names nil)) &body body)
   `(let ((,instance (vk:create-instance (make-instance 'vk:instance-create-info
                                                        :application-info (make-instance 'vk:application-info
                                                                                         :application-name ,app-name
                                                                                         :application-version 1
                                                                                         :engine-name ,engine-name
                                                                                         :engine-version 1
-                                                                                        :api-version *api-version*)))))
+                                                                                        :api-version *api-version*)
+                                                       :enabled-layer-names ,layer-names
+                                                       :enabled-extension-names ,extension-names))))
      (unwind-protect
           (progn ,@body)
        (vk:destroy-instance ,instance))))
@@ -36,7 +38,7 @@
             (progn ,@body)
          (vk:destroy-device ,device)))))
 
-(defmacro with-instance-and-device ((instance device &optional (app-name "sample-app") (engine-name "vk")) &body body)
-  `(with-instance (,instance ,app-name ,engine-name)
+(defmacro with-instance-and-device ((instance device &optional (app-name "sample-app") (engine-name "vk") (layer-names nil) (extension-names nil)) &body body)
+  `(with-instance (,instance ,app-name ,engine-name ,layer-names ,extension-names)
      (with-device (,device ,instance)
        (progn ,@body))))

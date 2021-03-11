@@ -6,8 +6,10 @@
    #:*api-version*
    #:*vk-validation-layer-name*
    #:with-instance
+   #:with-debug-instance
    #:with-device
    #:with-instance-and-device
+   #:with-debug-instance-and-device
    #:define-debug-utils-messenger-callback
    #:default-debug-utils-log-callback))
 
@@ -74,4 +76,5 @@
    #:03-init-device
    #:04-init-command-buffer
    #:create-debug-utils-messenger
-   #:create-debug-utils-messenger-next))
+   #:create-debug-utils-messenger-next
+   #:run-all-samples))

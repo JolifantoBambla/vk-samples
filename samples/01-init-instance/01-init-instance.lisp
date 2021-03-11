@@ -2,11 +2,11 @@
 
 (in-package #:vk-samples/01-init-instance)
 
-(defun 01-init-instance (&optional (app-name "01-init-instance") (engine-name "vk"))
+(defun 01-init-instance (&optional (app-name "01-init-instance"))
   (let* ((application-info (make-instance 'vk:application-info
                                           :application-name app-name
                                           :application-version 1
-                                          :engine-name engine-name
+                                          :engine-name "vk"
                                           :engine-version 1
                                           :api-version *api-version*))
          (create-info (make-instance 'vk:instance-create-info

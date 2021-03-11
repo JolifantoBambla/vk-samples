@@ -19,13 +19,13 @@
   ;; a debug callback MUST return VkFalse! (NIL will be translated to VkFalse automatically)
   nil)
 
-(defun create-debug-utils-messenger (&optional (app-name "create-debug-utils-messenger") (engine-name "vk"))
+(defun create-debug-utils-messenger (&optional (app-name "create-debug-utils-messenger"))
   (assert (find-if (lambda (p)
                      (string= (vk:extension-name p) vk:+ext-debug-utils-extension-name+))
                    (vk:enumerate-instance-extension-properties))
           ()
           "Could not find the ~a extension." vk:+ext-debug-utils-extension-name+)
-  (with-instance (instance app-name engine-name nil (list vk:+ext-debug-utils-extension-name+))
+  (with-instance (instance app-name nil (list vk:+ext-debug-utils-extension-name+))
     ;; supply the default extension loader with our instance
     (setf vk:*default-extension-loader* (vk:make-extension-loader :instance instance))
     ;; set up the create info

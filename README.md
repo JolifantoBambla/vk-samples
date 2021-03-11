@@ -11,6 +11,8 @@ Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindin
 | 02-enumerate-devices | Shows how to enumerate physical devices. |
 | 03-init-device | Shows how to create and destroy a Vulkan device. |
 | create-debug-utils-messenger | Shows how to create and destroy a debug callback. |
+| create-debug-utils-messenger-next | Shows how to use the NEXT slot of a VK:INSTANCE-CREATE-INFO to create and destroy a debug callback alongside a Vulkan instance. |
+
 
 ## Acknowledgements
 The samples in this repository closely follows the [VulkanSamples by LunarG](https://github.com/LunarG/VulkanSamples) as well as the samples for [Vulkan-Hpp](https://github.com/KhronosGroup/Vulkan-Hpp).

@@ -2,6 +2,8 @@
 
 (in-package #:vk-samples/utils)
 
+(defparameter *vk-validation-layer-name* "VK_LAYER_KHRONOS_validation")
+
 (defparameter *api-version* (vk:make-api-version 1 2 153))
 
 (defmacro define-debug-utils-messenger-callback (name logger &optional (user-data-type nil))
@@ -26,12 +28,12 @@
       (format t "[~a] ~a: ~a~%"
               log-level message-type (vk:message message))))
 
-(defmacro with-instance ((instance &optional (app-name "sample-app") (engine-name "vk") (layer-names nil) (extension-names nil)) &body body)
+(defmacro with-instance ((instance &optional (app-name "sample-app") (layer-names nil) (extension-names nil)) &body body)
   `(let ((,instance (vk:create-instance (make-instance 'vk:instance-create-info
                                                        :application-info (make-instance 'vk:application-info
                                                                                         :application-name ,app-name
                                                                                         :application-version 1
-                                                                                        :engine-name ,engine-name
+                                                                                        :engine-name "vk"
                                                                                         :engine-version 1
                                                                                         :api-version *api-version*)
                                                        :enabled-layer-names ,layer-names
@@ -60,7 +62,7 @@
             (progn ,@body)
          (vk:destroy-device ,device)))))
 
-(defmacro with-instance-and-device ((instance device &optional (app-name "sample-app") (engine-name "vk") (layer-names nil) (extension-names nil)) &body body)
-  `(with-instance (,instance ,app-name ,engine-name ,layer-names ,extension-names)
+(defmacro with-instance-and-device ((instance device &optional (app-name "sample")) &body body)
+  `(with-instance (,instance ,app-name)
      (with-device (,device ,instance)
        (progn ,@body))))

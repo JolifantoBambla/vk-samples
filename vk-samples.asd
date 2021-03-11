@@ -19,5 +19,7 @@
                              (:module "04-init-command-buffer"
                               :components ((:file "04-init-command-buffer")))
                              (:module "create-debug-utils-messenger"
-                              :components ((:file "create-debug-utils-messenger")))))
+                              :components ((:file "create-debug-utils-messenger")))
+                             (:module "create-debug-utils-messenger-next"
+                              :components ((:file "create-debug-utils-messenger-next")))))
                (:file "vk-samples")))

@@ -4,6 +4,7 @@
   (:use #:cl)
   (:export
    #:*api-version*
+   #:*vk-validation-layer-name*
    #:with-instance
    #:with-device
    #:with-instance-and-device
@@ -34,16 +35,23 @@
 (defpackage #:vk-samples/04-init-command-buffer
   (:documentation "Shows how to create a Vulkan command buffer.")
    (:use #:cl
-        #:vk-samples/utils)
+         #:vk-samples/utils)
   (:export
    #:04-init-command-buffer))
 
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
-        #:vk-samples/utils)
+         #:vk-samples/utils)
   (:export
    #:create-debug-utils-messenger))
+
+(defpackage #:vk-samples/create-debug-utils-messenger-next
+  (:documentation "Shows how to create and destroy a debug callback via the VkInstanceCreateInfo's pNext member.")
+   (:use #:cl
+         #:vk-samples/utils)
+  (:export
+   #:create-debug-utils-messenger-next))
 
 (defpackage #:vk-samples
   (:documentation "Usage samples for the Vulkan bindings provided by VK.")
@@ -58,9 +66,12 @@
                 #:04-init-command-buffer)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
+  (:import-from #:vk-samples/create-debug-utils-messenger-next
+                #:create-debug-utils-messenger-next)
   (:export
    #:01-init-instance
    #:02-enumerate-devices
    #:03-init-device
    #:04-init-command-buffer
-   #:create-debug-utils-messenger))
+   #:create-debug-utils-messenger
+   #:create-debug-utils-messenger-next))

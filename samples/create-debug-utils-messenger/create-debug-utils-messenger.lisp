@@ -31,7 +31,7 @@
     ;; set up the create info
     (let* ((create-info (make-instance 'vk:debug-utils-messenger-create-info-ext
                                        :message-type '(:general :performance :validation)
-                                       :message-severity '(:verbose :info :warning :error)
+                                       :message-severity '(:info :warning :error)
                                        :pfn-user-callback (cffi:get-callback 'debug-messenger-callback)
                                        :user-data (cffi:null-pointer)))
            ;; create the debug utils messenger

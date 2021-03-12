@@ -65,37 +65,39 @@
           (progn ,@body)
        (vk:destroy-instance ,instance))))
 
-(defmacro with-device ((device instance) &body body)
-  (let ((physical-device (gensym)))
-    `(let* ((,physical-device (first (vk:enumerate-physical-devices ,instance)))
-            (,device
-              (vk:create-device
-               ,physical-device
-               (make-instance
-                'vk:device-create-info
-                :queue-create-infos (list
-                                     (make-instance
-                                      'vk:device-queue-create-info
-                                      :queue-family-index (position-if
-                                                           (lambda (q)
-                                                             (member :graphics (vk:queue-flags q)))
-                                                           (vk:get-physical-device-queue-family-properties ,physical-device))
-                                      :queue-priorities '(0.0)))))))
-       (unwind-protect
-            (progn ,@body)
-         (vk:destroy-device ,device)))))
+(defun find-graphics-queue-family-index (physical-device)
+  (position-if
+   (lambda (q)
+     (member :graphics (vk:queue-flags q)))
+   (vk:get-physical-device-queue-family-properties physical-device)))
+
+(defmacro with-device ((device instance &optional (physical-device (gensym "PHYSICAL-DEVICE"))) &body body)
+  `(let* ((,physical-device (first (vk:enumerate-physical-devices ,instance)))
+          (,device
+            (vk:create-device
+             ,physical-device
+             (make-instance
+              'vk:device-create-info
+              :queue-create-infos (list
+                                   (make-instance
+                                    'vk:device-queue-create-info
+                                    :queue-family-index (find-graphics-queue-family-index ,physical-device)
+                                    :queue-priorities '(0.0)))))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-device ,device))))
 
 (defmacro with-instance-and-device ((instance device &optional (app-name "sample")) &body body)
   `(with-instance (,instance ,app-name)
      (with-device (,device ,instance)
        (progn ,@body))))
 
-(defmacro with-debug-instance-and-device ((instance device &key (app-name "sample-app") (layer-names nil) (extension-names nil) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
+(defmacro with-debug-instance-and-device ((instance device physical-device &key (app-name "sample-app") (layer-names nil) (extension-names nil) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
   `(with-debug-instance (,instance
                          :app-name ,app-name
                          :layer-names ,layer-names
                          :extension-names ,extension-names
                          :log-levels ,log-levels
                          :message-types ,message-types)
-     (with-device (,device ,instance)
+     (with-device (,device ,instance ,physical-device)
        (progn ,@body))))

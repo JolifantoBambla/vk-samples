@@ -4,7 +4,7 @@
 
 (defun 04-init-command-buffer (&optional (app-name "04-init-command-buffer"))
   ;; with-debug-instance-and-device is located in utils - check 03-init-device to see how to create and destroy a device
-  (with-debug-instance-and-device (instance device physical-device :app-name app-name :log-levels (:info :warning :error))
+  (with-debug-instance-and-device (instance device physical-device :app-name app-name :log-levels (:warning :error))
     (let* ((create-info (make-instance 'vk:command-pool-create-info
                                        ;; the device has created a queue from the same queue family (check out 03-init-device) 
                                        :queue-family-index (find-graphics-queue-family-index physical-device)))

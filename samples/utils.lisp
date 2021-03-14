@@ -71,29 +71,6 @@
               (progn ,@body)
            (vk:destroy-instance ,instance))))))
 
-(defmacro with-debug-instance ((instance &key (app-name "sample-app") (layer-names nil) (extension-names nil) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
-  (unless (member *vk-validation-layer-name* layer-names :test #'string=)
-    (push *vk-validation-layer-name* layer-names))
-  (unless (member vk:+ext-debug-utils-extension-name+ extension-names :test #'string=)
-    (push vk:+ext-debug-utils-extension-name+ extension-names))
-  `(let ((,instance (vk:create-instance (make-instance 'vk:instance-create-info
-                                                       :next (make-instance 'vk:debug-utils-messenger-create-info-ext
-                                                                          :message-type '(,@message-types)
-                                                                          :message-severity '(,@log-levels)
-                                                                          :pfn-user-callback (cffi:get-callback 'default-debug-utils-log-callback)
-                                                                          :user-data (cffi:null-pointer))
-                                                       :application-info (make-instance 'vk:application-info
-                                                                                        :application-name ,app-name
-                                                                                        :application-version 1
-                                                                                        :engine-name "vk"
-                                                                                        :engine-version 1
-                                                                                        :api-version *api-version*)
-                                                       :enabled-layer-names '(,@layer-names)
-                                                       :enabled-extension-names '(,@extension-names)))))
-     (unwind-protect
-          (progn ,@body)
-       (vk:destroy-instance ,instance))))
-
 (defun find-graphics-queue-family-index (physical-device)
   (position-if
    (lambda (q)
@@ -125,12 +102,3 @@
      (with-device (,device ,instance ,physical-device)
        (progn ,@body))))
 
-(defmacro with-debug-instance-and-device ((instance device physical-device &key (app-name "sample-app") (layer-names nil) (extension-names nil) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
-  `(with-debug-instance (,instance
-                         :app-name ,app-name
-                         :layer-names ,layer-names
-                         :extension-names ,extension-names
-                         :log-levels ,log-levels
-                         :message-types ,message-types)
-     (with-device (,device ,instance ,physical-device)
-       (progn ,@body))))

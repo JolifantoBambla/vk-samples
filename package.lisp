@@ -10,10 +10,8 @@
    #:make-default-application-info
    #:make-default-debug-utils-messenger-create-info
    #:with-instance
-   #:with-debug-instance
    #:with-device
    #:with-instance-and-device
-   #:with-debug-instance-and-device
    #:find-graphics-queue-family-index
    #:define-debug-utils-messenger-callback
    #:default-debug-utils-log-callback))

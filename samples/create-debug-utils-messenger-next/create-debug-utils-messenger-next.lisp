@@ -22,12 +22,7 @@
                                                                           :message-severity '(:info :warning :error)
                                                                           :pfn-user-callback (cffi:get-callback 'default-debug-utils-log-callback)
                                                                           :user-data (cffi:null-pointer))
-                                                     :application-info (make-instance 'vk:application-info
-                                                                                      :application-name app-name
-                                                                                      :application-version 1
-                                                                                      :engine-name "vk"
-                                                                                      :engine-version 1
-                                                                                      :api-version *api-version*)
+                                                     :application-info (make-default-application-info app-name)
                                                      ;; we enable the validation layer to get validation messages
                                                      :enabled-layer-names (list *vk-validation-layer-name*)
                                                      :enabled-extension-names (list vk:+ext-debug-utils-extension-name+)))))

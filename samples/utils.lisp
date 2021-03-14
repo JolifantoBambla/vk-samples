@@ -6,6 +6,32 @@
 
 (defparameter *api-version* (vk:make-api-version 1 2 153))
 
+;;; BEGIN: WINDOW UTILS
+;; todo: open issue / pull-request over at cl-glfw3 to add the functions I need
+
+(cffi:defcfun ("glfwGetRequiredInstanceExtensions" %glfw-get-required-instance-extensions) :pointer
+  (count :pointer))
+
+(cffi:defcfun ("glfwCreateWindowSurface" %glfw-create-window-surface) %vk:result
+  (instance %vk:instance)
+  (window :pointer)
+  (allocator :pointer)
+  (surface-khr %vk:surface-khr))
+
+(defun glfw-get-required-instance-extensions ()
+  (cffi:with-foreign-object (count :uint32)
+    (let* ((result (%glfw-get-required-instance-extensions count))
+           (extension-count (cffi:mem-aref count :uint32)))
+      (loop for i from 0 below extension-count
+            collect (cffi:mem-aref result :string i)))))
+
+(defun glfw-create-window-surface (instance &optional (window glfw:*window*) (allocator vk:*default-allocator*))
+  (cffi:with-foreign-object (surface-khr '%vk:surface-khr)
+    (let ((result (%glfw-create-window-surface instance window allocator surface-khr)))
+      (values (cffi:mem-aref surface-khr '%vk:surface-khr) result))))
+
+;;; END: WINDOW UTILS
+
 (defmacro define-debug-utils-messenger-callback (name logger &optional (user-data-type nil))
   (let ((log-level (gensym))
         (message-type (gensym))
@@ -28,19 +54,44 @@
       (format t "[~a] ~a: ~a~%"
               log-level message-type (vk:message message))))
 
-(defmacro with-instance ((instance &optional (app-name "sample-app") (layer-names nil) (extension-names nil)) &body body)
-  `(let ((,instance (vk:create-instance (make-instance 'vk:instance-create-info
-                                                       :application-info (make-instance 'vk:application-info
-                                                                                        :application-name ,app-name
-                                                                                        :application-version 1
-                                                                                        :engine-name "vk"
-                                                                                        :engine-version 1
-                                                                                        :api-version *api-version*)
-                                                       :enabled-layer-names ,layer-names
-                                                       :enabled-extension-names ,extension-names))))
-     (unwind-protect
-          (progn ,@body)
-       (vk:destroy-instance ,instance))))
+(defun make-default-application-info (app-name)
+  (make-instance 'vk:application-info
+                 :application-name app-name
+                 :application-version 1
+                 :engine-name "vk"
+                 :engine-version 1
+                 :api-version *api-version*))
+
+(defun make-default-debug-utils-messenger-create-info (&key (log-levels '(:warning :error)) (message-types '(:validation)))
+  (make-instance 'vk:debug-utils-messenger-create-info-ext
+                 :message-type message-types
+                 :message-severity log-levels
+                 :pfn-user-callback (cffi:get-callback 'default-debug-utils-log-callback)
+                 :user-data (cffi:null-pointer)))
+
+(defmacro with-instance ((instance &key (app-name "sample-app") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
+  (let ((extension-names (gensym "EXT-NAMES"))
+        (layer-names (gensym "LAYER-NAMES")))
+    `(let ((,layer-names nil)
+           (,extension-names nil))
+       (when ,window-extensions
+         (setf ,extension-names (nconc extension-names (glfw-get-required-instance-extensions))))
+       (when ,log-levels
+         (push vk:+ext-debug-utils-extension-name+ ,extension-names))
+       (when (and ,message-types
+                  (member :validation ,message-types))
+         (push *vk-validation-layer-name* ,layer-names))
+       (let ((,instance (vk:create-instance (make-instance 'vk:instance-create-info
+                                                           :next (when ,log-levels
+                                                                   (make-default-debug-utils-messenger-create-info
+                                                                    :log-levels ,log-levels
+                                                                    :message-types ,message-types))
+                                                           :application-info (make-default-application-info ,app-name)
+                                                           :enabled-layer-names ,layer-names
+                                                           :enabled-extension-names ,extension-names))))
+         (unwind-protect
+              (progn ,@body)
+           (vk:destroy-instance ,instance))))))
 
 (defmacro with-debug-instance ((instance &key (app-name "sample-app") (layer-names nil) (extension-names nil) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
   (unless (member *vk-validation-layer-name* layer-names :test #'string=)
@@ -87,9 +138,13 @@
           (progn ,@body)
        (vk:destroy-device ,device))))
 
-(defmacro with-instance-and-device ((instance device &optional (app-name "sample")) &body body)
-  `(with-instance (,instance ,app-name)
-     (with-device (,device ,instance)
+(defmacro with-instance-and-device ((instance device physical-device &key (app-name "sample") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
+  `(with-instance (,instance
+                   :app-name,app-name
+                   :window-extensions ,window-extensions
+                   :log-levels ,log-levels
+                   :message-types ,message-types)
+     (with-device (,device ,instance ,physical-device)
        (progn ,@body))))
 
 (defmacro with-debug-instance-and-device ((instance device physical-device &key (app-name "sample-app") (layer-names nil) (extension-names nil) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)

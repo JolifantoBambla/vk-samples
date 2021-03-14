@@ -4,6 +4,9 @@ Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindin
 ## Requirements
 *TODO*
 
+* `glfw3` for `cl-glfw`
+* `libffi` for `cl-glfw`
+
 ## Samples
 | Name | Description |
 | -----| ----------- |

@@ -5,6 +5,10 @@
   (:export
    #:*api-version*
    #:*vk-validation-layer-name*
+   #:glfw-get-required-instance-extensions
+   #:glfw-create-window-surface
+   #:make-default-application-info
+   #:make-default-debug-utils-messenger-create-info
    #:with-instance
    #:with-debug-instance
    #:with-device
@@ -42,6 +46,13 @@
   (:export
    #:04-init-command-buffer))
 
+(defpackage #:vk-samples/05-init-swapchain
+  (:documentation "Shows how to initialize Vulkan swapchain.")
+   (:use #:cl
+         #:vk-samples/utils)
+  (:export
+   #:05-init-swapchain))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -67,6 +78,8 @@
                 #:03-init-device)
   (:import-from #:vk-samples/04-init-command-buffer
                 #:04-init-command-buffer)
+  (:import-from #:vk-samples/05-init-swapchain
+                #:05-init-swapchain)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -76,6 +89,7 @@
    #:02-enumerate-devices
    #:03-init-device
    #:04-init-command-buffer
+   #:05-init-swapchain
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

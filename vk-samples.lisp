@@ -11,6 +11,8 @@
   (03-init-device)
   (format t "~%~%Running 04-init-command-buffer!~%")
   (04-init-command-buffer)
+  (format t "~%~%Running 05-init-swapchain!~%")
+  (05-init-swapchain)
   (format t "~%~%Running create-debug-utils-messenger!~%")
   (create-debug-utils-messenger)
   (format t "~%~%Running create-debug-utils-messenger-next!~%")

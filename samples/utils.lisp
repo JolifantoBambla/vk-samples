@@ -45,21 +45,25 @@
 
 (defmacro with-instance ((instance &key (app-name "sample-app") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
   (let ((extension-names (gensym "EXT-NAMES"))
-        (layer-names (gensym "LAYER-NAMES")))
+        (layer-names (gensym "LAYER-NAMES"))
+        (message-type (gensym "MESSAGE-TYPE"))
+        (message-severity (gensym "MESSAGE-SEVERITY")))
     `(let ((,layer-names nil)
-           (,extension-names nil))
+           (,extension-names nil)
+           (,message-severity '(,@log-levels))
+           (,message-type '(,@message-types)))
        (when ,window-extensions
-         (setf ,extension-names (nconc extension-names (glfw-get-required-instance-extensions))))
-       (when ,log-levels
+         (setf ,extension-names (nconc ,extension-names (glfw:get-required-instance-extensions))))
+       (when ,message-severity
          (push vk:+ext-debug-utils-extension-name+ ,extension-names))
-       (when (and ,message-types
-                  (member :validation ,message-types))
+       (when (and ,message-type
+                  (member :validation ,message-type))
          (push *vk-validation-layer-name* ,layer-names))
        (let ((,instance (vk:create-instance (make-instance 'vk:instance-create-info
-                                                           :next (when ,log-levels
+                                                           :next (when ,message-severity
                                                                    (make-default-debug-utils-messenger-create-info
-                                                                    :log-levels ,log-levels
-                                                                    :message-types ,message-types))
+                                                                    :log-levels ,message-severity
+                                                                    :message-types ,message-type))
                                                            :application-info (make-default-application-info ,app-name)
                                                            :enabled-layer-names ,layer-names
                                                            :enabled-extension-names ,extension-names))))

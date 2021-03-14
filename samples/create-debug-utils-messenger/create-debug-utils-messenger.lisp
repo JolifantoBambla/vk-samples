@@ -27,9 +27,9 @@
           ()
           "Could not find the ~a extension." vk:+ext-debug-utils-extension-name+)
   (let ((instance (vk:create-instance (make-instance 'vk:instance-create-info
-                                                           :application-info (make-default-application-info app-name)
-                                                           ;; we need to enable the debug utils extension during instance creation
-                                                           :enabled-extension-names (list vk:+ext-debug-utils-extension-name+)))))
+                                                     :application-info (make-default-application-info app-name)
+                                                     ;; we need to enable the debug utils extension during instance creation
+                                                     :enabled-extension-names (list vk:+ext-debug-utils-extension-name+)))))
     (unwind-protect
          (progn
            ;; supply the default extension loader with our instance, so it can load the extension functions to create and destroy the

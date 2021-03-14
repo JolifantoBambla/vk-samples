@@ -34,7 +34,9 @@
            (let ((surface (glfw:create-window-surface instance glfw:*window* vk:*default-allocator*)))
              (unwind-protect
                   (progn
+                    ;; I'll quickly test all the vulkan functions in glfw
                     (format t "some instance proc address: ~a~%" (glfw:get-instance-proc-address instance "vkDestroySurfaceKHR"))
+                    (format t "some instance proc address: ~a~%" (vk:get-instance-proc-addr "vkDestroySurfaceKHR" instance))
                     (loop for p in (vk:enumerate-physical-devices instance)
                           do (loop for q in (vk:get-physical-device-queue-family-properties p)
                                    for i from 0

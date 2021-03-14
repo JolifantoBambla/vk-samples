@@ -28,19 +28,48 @@
       (format t "[~a] ~a: ~a~%"
               log-level message-type (vk:message message))))
 
-(defmacro with-instance ((instance &optional (app-name "sample-app") (layer-names nil) (extension-names nil)) &body body)
-  `(let ((,instance (vk:create-instance (make-instance 'vk:instance-create-info
-                                                       :application-info (make-instance 'vk:application-info
-                                                                                        :application-name ,app-name
-                                                                                        :application-version 1
-                                                                                        :engine-name "vk"
-                                                                                        :engine-version 1
-                                                                                        :api-version *api-version*)
-                                                       :enabled-layer-names ,layer-names
-                                                       :enabled-extension-names ,extension-names))))
-     (unwind-protect
-          (progn ,@body)
-       (vk:destroy-instance ,instance))))
+(defun make-default-application-info (app-name)
+  (make-instance 'vk:application-info
+                 :application-name app-name
+                 :application-version 1
+                 :engine-name "vk"
+                 :engine-version 1
+                 :api-version *api-version*))
+
+(defun make-default-debug-utils-messenger-create-info (&key (log-levels '(:warning :error)) (message-types '(:validation)))
+  (make-instance 'vk:debug-utils-messenger-create-info-ext
+                 :message-type message-types
+                 :message-severity log-levels
+                 :pfn-user-callback (cffi:get-callback 'default-debug-utils-log-callback)
+                 :user-data (cffi:null-pointer)))
+
+(defmacro with-instance ((instance &key (app-name "sample-app") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
+  (let ((extension-names (gensym "EXT-NAMES"))
+        (layer-names (gensym "LAYER-NAMES"))
+        (message-type (gensym "MESSAGE-TYPE"))
+        (message-severity (gensym "MESSAGE-SEVERITY")))
+    `(let ((,layer-names nil)
+           (,extension-names nil)
+           (,message-severity '(,@log-levels))
+           (,message-type '(,@message-types)))
+       (when ,window-extensions
+         (setf ,extension-names (nconc ,extension-names (glfw:get-required-instance-extensions))))
+       (when ,message-severity
+         (push vk:+ext-debug-utils-extension-name+ ,extension-names))
+       (when (and ,message-type
+                  (member :validation ,message-type))
+         (push *vk-validation-layer-name* ,layer-names))
+       (let ((,instance (vk:create-instance (make-instance 'vk:instance-create-info
+                                                           :next (when ,message-severity
+                                                                   (make-default-debug-utils-messenger-create-info
+                                                                    :log-levels ,message-severity
+                                                                    :message-types ,message-type))
+                                                           :application-info (make-default-application-info ,app-name)
+                                                           :enabled-layer-names ,layer-names
+                                                           :enabled-extension-names ,extension-names))))
+         (unwind-protect
+              (progn ,@body)
+           (vk:destroy-instance ,instance))))))
 
 (defmacro with-debug-instance ((instance &key (app-name "sample-app") (layer-names nil) (extension-names nil) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
   (unless (member *vk-validation-layer-name* layer-names :test #'string=)
@@ -87,9 +116,13 @@
           (progn ,@body)
        (vk:destroy-device ,device))))
 
-(defmacro with-instance-and-device ((instance device &optional (app-name "sample")) &body body)
-  `(with-instance (,instance ,app-name)
-     (with-device (,device ,instance)
+(defmacro with-instance-and-device ((instance device physical-device &key (app-name "sample") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
+  `(with-instance (,instance
+                   :app-name,app-name
+                   :window-extensions ,window-extensions
+                   :log-levels ,log-levels
+                   :message-types ,message-types)
+     (with-device (,device ,instance ,physical-device)
        (progn ,@body))))
 
 (defmacro with-debug-instance-and-device ((instance device physical-device &key (app-name "sample-app") (layer-names nil) (extension-names nil) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)

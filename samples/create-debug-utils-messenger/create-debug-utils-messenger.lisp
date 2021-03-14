@@ -20,23 +20,33 @@
   nil)
 
 (defun create-debug-utils-messenger (&optional (app-name "create-debug-utils-messenger"))
+  ;; first we check if the system supports the debug utils extension
   (assert (find-if (lambda (p)
                      (string= (vk:extension-name p) vk:+ext-debug-utils-extension-name+))
                    (vk:enumerate-instance-extension-properties))
           ()
           "Could not find the ~a extension." vk:+ext-debug-utils-extension-name+)
-  (with-instance (instance app-name nil (list vk:+ext-debug-utils-extension-name+))
-    ;; supply the default extension loader with our instance
-    (setf vk:*default-extension-loader* (vk:make-extension-loader :instance instance))
-    ;; set up the create info
-    (let* ((create-info (make-instance 'vk:debug-utils-messenger-create-info-ext
-                                       :message-type '(:general :performance :validation)
-                                       :message-severity '(:info :warning :error)
-                                       :pfn-user-callback (cffi:get-callback 'debug-messenger-callback)
-                                       :user-data (cffi:null-pointer)))
-           ;; create the debug utils messenger
-           (messenger (vk:create-debug-utils-messenger-ext instance create-info)))
-      ;; create and destroy a device to actually get some debug messages
-      (with-device (device instance))
-      ;; destroy the messenger - must be destroyed before the instance is destroyed!
-      (vk:destroy-debug-utils-messenger-ext instance messenger))))
+  (let ((instance (vk:create-instance (make-instance 'vk:instance-create-info
+                                                     :application-info (make-default-application-info app-name)
+                                                     ;; we need to enable the debug utils extension during instance creation
+                                                     :enabled-extension-names (list vk:+ext-debug-utils-extension-name+)))))
+    (unwind-protect
+         (progn
+           ;; supply the default extension loader with our instance, so it can load the extension functions to create and destroy the
+           ;; debug utils messenger
+           (setf vk:*default-extension-loader* (vk:make-extension-loader :instance instance))
+           ;; set up the create info
+           (let* ((create-info (make-instance 'vk:debug-utils-messenger-create-info-ext
+                                              :message-type '(:general :performance :validation)
+                                              :message-severity '(:info :warning :error)
+                                              :pfn-user-callback (cffi:get-callback 'debug-messenger-callback)
+                                              :user-data (cffi:null-pointer)))
+                  ;; create the debug utils messenger
+                  (messenger (vk:create-debug-utils-messenger-ext instance create-info)))
+             (unwind-protect
+                  ;; create and destroy a device to actually get some debug messages
+                  (with-device (device instance))
+               ;; destroy the messenger - must be destroyed before the instance is destroyed!
+               (vk:destroy-debug-utils-messenger-ext instance messenger))))
+      ;; finally destroy the instance
+      (vk:destroy-instance instance))))

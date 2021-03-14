@@ -5,7 +5,8 @@
 (defun 05-init-swapchain (&optional (app-name "05-init-swapchain"))
   ;; graphics calls on OS X must occur in the main thread
   ;; so this should be wrapped within this: (trivial-main-thread:with-body-in-main-thread ()
-  ;; but I'm not sure if I'm using it correctly
+  ;; but I'm not sure if I'm using it correctly since it only returns scheduled tasks and never(?) runs them
+  ;; how do I get logs from the main thread?
   
   ;; to create a swapchain we first need a window. we'll use glfw3 for the window creation
   (glfw:with-init-window (:title app-name :width 64 :height 64 :client-api :no-api)
@@ -33,7 +34,12 @@
            (let ((surface (glfw:create-window-surface instance glfw:*window* vk:*default-allocator*)))
              (unwind-protect
                   (progn
-                    )
+                    (format t "some instance proc address: ~a~%" (glfw:get-instance-proc-address instance "vkDestroySurfaceKHR"))
+                    (loop for p in (vk:enumerate-physical-devices instance)
+                          do (loop for q in (vk:get-physical-device-queue-family-properties p)
+                                   for i from 0
+                                   do (format t "physical device presentation support: ~a (queue family: ~a)~%"
+                                              (glfw:physical-device-presentation-support-p instance p i) i))))
                ;; TODO: document that vk*KHR stuff is loaded by default, so we don't need to initialize an extension loader
                ;; even though we didn't create the surface using the Vulkan API, we must destroy it via VK:DESTROY-SURFACE-KHR
                (vk:destroy-surface-khr instance surface)))

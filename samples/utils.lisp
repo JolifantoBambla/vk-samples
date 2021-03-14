@@ -6,32 +6,6 @@
 
 (defparameter *api-version* (vk:make-api-version 1 2 153))
 
-;;; BEGIN: WINDOW UTILS
-;; todo: open issue / pull-request over at cl-glfw3 to add the functions I need
-
-(cffi:defcfun ("glfwGetRequiredInstanceExtensions" %glfw-get-required-instance-extensions) :pointer
-  (count :pointer))
-
-(cffi:defcfun ("glfwCreateWindowSurface" %glfw-create-window-surface) %vk:result
-  (instance %vk:instance)
-  (window :pointer)
-  (allocator :pointer)
-  (surface-khr %vk:surface-khr))
-
-(defun glfw-get-required-instance-extensions ()
-  (cffi:with-foreign-object (count :uint32)
-    (let* ((result (%glfw-get-required-instance-extensions count))
-           (extension-count (cffi:mem-aref count :uint32)))
-      (loop for i from 0 below extension-count
-            collect (cffi:mem-aref result :string i)))))
-
-(defun glfw-create-window-surface (instance &optional (window glfw:*window*) (allocator vk:*default-allocator*))
-  (cffi:with-foreign-object (surface-khr '%vk:surface-khr)
-    (let ((result (%glfw-create-window-surface instance window allocator surface-khr)))
-      (values (cffi:mem-aref surface-khr '%vk:surface-khr) result))))
-
-;;; END: WINDOW UTILS
-
 (defmacro define-debug-utils-messenger-callback (name logger &optional (user-data-type nil))
   (let ((log-level (gensym))
         (message-type (gensym))

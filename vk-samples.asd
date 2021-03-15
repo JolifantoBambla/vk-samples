@@ -20,6 +20,8 @@
                               :components ((:file "04-init-command-buffer")))
                              (:module "05-init-swapchain"
                               :components ((:file "05-init-swapchain")))
+                             (:module "07-init-uniform-buffer"
+                              :components ((:file "07-init-uniform-buffer")))
                              (:module "create-debug-utils-messenger"
                               :components ((:file "create-debug-utils-messenger")))
                              (:module "create-debug-utils-messenger-next"

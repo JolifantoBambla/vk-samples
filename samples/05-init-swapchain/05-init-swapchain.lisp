@@ -4,9 +4,7 @@
 
 (defun 05-init-swapchain (&optional (app-name "05-init-swapchain") (window-width 64) (window-height 64))
   ;; graphics calls on OS X must occur in the main thread
-  ;; so this should be wrapped within this: (trivial-main-thread:with-body-in-main-thread ()
-  ;; but I'm not sure if I'm using it correctly since it only returns scheduled tasks and never(?) runs them
-  ;; how do I get logs from the main thread?
+  ;; todo: wrap this (trivial-main-thread:with-body-in-main-thread ()
   
   ;; to create a swapchain we first need a window. we'll use glfw3 for the window creation
   (glfw:with-init-window (:title app-name :width window-width :height window-height :client-api :no-api)

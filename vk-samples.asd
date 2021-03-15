@@ -6,7 +6,7 @@
   :license  "MIT"
   :version "0.0.1"
   :serial t
-  :depends-on (#:vk #:cffi #:cl-glfw3 #:trivial-main-thread)
+  :depends-on (#:vk #:cffi #:cl-glfw3 #:rtg-math #:trivial-main-thread)
   :components ((:file "package")
                (:module "samples"
                 :components ((:file "utils")

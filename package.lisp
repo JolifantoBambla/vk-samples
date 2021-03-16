@@ -5,8 +5,7 @@
   (:export
    #:*api-version*
    #:*vk-validation-layer-name*
-   #:glfw-get-required-instance-extensions
-   #:glfw-create-window-surface
+   #:memcpy
    #:make-default-application-info
    #:make-default-debug-utils-messenger-create-info
    #:with-instance
@@ -51,6 +50,13 @@
   (:export
    #:05-init-swapchain))
 
+(defpackage #:vk-samples/07-init-uniform-buffer
+  (:documentation "Shows how to create a uniform buffer.")
+   (:use #:cl
+         #:vk-samples/utils)
+  (:export
+   #:07-init-uniform-buffer))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -78,6 +84,8 @@
                 #:04-init-command-buffer)
   (:import-from #:vk-samples/05-init-swapchain
                 #:05-init-swapchain)
+  (:import-from #:vk-samples/07-init-uniform-buffer
+                #:07-init-uniform-buffer)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -88,6 +96,7 @@
    #:03-init-device
    #:04-init-command-buffer
    #:05-init-swapchain
+   #:07-init-uniform-buffer
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

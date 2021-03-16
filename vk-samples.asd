@@ -6,7 +6,7 @@
   :license  "MIT"
   :version "0.0.1"
   :serial t
-  :depends-on (#:vk #:cffi #:cl-glfw3 #:trivial-main-thread)
+  :depends-on (#:vk #:cffi #:cl-glfw3 #:rtg-math #:trivial-main-thread)
   :components ((:file "package")
                (:module "samples"
                 :components ((:file "utils")
@@ -20,6 +20,8 @@
                               :components ((:file "04-init-command-buffer")))
                              (:module "05-init-swapchain"
                               :components ((:file "05-init-swapchain")))
+                             (:module "07-init-uniform-buffer"
+                              :components ((:file "07-init-uniform-buffer")))
                              (:module "create-debug-utils-messenger"
                               :components ((:file "create-debug-utils-messenger")))
                              (:module "create-debug-utils-messenger-next"

@@ -5,8 +5,7 @@
   (:export
    #:*api-version*
    #:*vk-validation-layer-name*
-   #:glfw-get-required-instance-extensions
-   #:glfw-create-window-surface
+   #:memcpy
    #:make-default-application-info
    #:make-default-debug-utils-messenger-create-info
    #:with-instance

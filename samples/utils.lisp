@@ -6,6 +6,12 @@
 
 (defparameter *api-version* (vk:make-api-version 1 2 153))
 
+;; todo: memcpy should be in VK-UTILS
+(cffi:defcfun ("memcpy" memcpy) :pointer
+  (dest :pointer)
+  (src :pointer)
+  (count %vk:size-t))
+
 (defmacro define-debug-utils-messenger-callback (name logger &optional (user-data-type nil))
   (let ((log-level (gensym))
         (message-type (gensym))

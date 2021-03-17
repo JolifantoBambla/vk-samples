@@ -14,7 +14,10 @@
    #:with-instance
    #:with-device
    #:with-instance-and-device
+   #:with-surface
+   #:with-gfx
    #:find-graphics-queue-family-index
+   #:find-graphics-and-present-queue-family-indices
    #:define-debug-utils-messenger-callback
    #:default-debug-utils-log-callback))
 

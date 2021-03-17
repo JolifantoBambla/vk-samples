@@ -119,28 +119,97 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
      (member :graphics (vk:queue-flags q)))
    (vk:get-physical-device-queue-family-properties physical-device)))
 
-(defmacro with-device ((device instance &optional (physical-device (gensym "PHYSICAL-DEVICE"))) &body body)
-  `(let* ((,physical-device (first (vk:enumerate-physical-devices ,instance)))
-          (,device
-            (vk:create-device
-             ,physical-device
-             (make-instance
-              'vk:device-create-info
-              :queue-create-infos (list
-                                   (make-instance
-                                    'vk:device-queue-create-info
-                                    :queue-family-index (find-graphics-queue-family-index ,physical-device)
-                                    :queue-priorities '(0.0)))))))
-     (unwind-protect
-          (progn ,@body)
-       (vk:destroy-device ,device))))
+(defun find-graphics-and-present-queue-family-indices (physical-device surface)
+  (let ((graphics-queue-family-index (find-graphics-queue-family-index physical-device))
+        (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device surface graphics-queue-family-index)
+                                      graphics-queue-family-index)))
+    (unless present-queue-family-index
+      (loop for q in queue-familiy-properties
+            for i from 0
+            when (and (member :graphics (vk:queue-flags q))
+                      (vk:get-physical-device-surface-support-khr physical-device surface i))
+            do (setf graphics-queue-family-index i)
+               (setf present-queue-family-index i)
+               (return)))
+    (unless present-queue-family-index
+      (loop for q in queue-family-properties
+            for i from 0
+            when (vk:get-physical-device-surface-support-khr physical-device surface i)
+            do (setf present-queue-family-index i)
+               (return)))
+    (unless present-queue-family-index
+      (error "Could not find a present queue family"))
+    (values graphics-queue-family-index
+            present-queue-family-index)))
 
-(defmacro with-instance-and-device ((instance device physical-device &key (app-name "sample") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
+(defmacro with-device ((device instance &optional (physical-device (gensym "PHYSICAL-DEVICE")) (surface nil)) &body body)
+  (let ((gfx (gensym "GRAPHICS-FAMILY"))
+        (present (gensym "PRESENT-FAMILY")))
+    `(let* ((,physical-device (first (vk:enumerate-physical-devices ,instance)))
+            (,device
+              (vk:create-device
+               ,physical-device
+               (make-instance
+                'vk:device-create-info
+                :queue-create-infos ,(if surface
+                                         `(multiple-value-bind (,gfx ,present)
+                                              (find-graphics-and-present-queue-family-indices ,physical-device ,surface)
+                                            (if (= ,gfx ,present)
+                                                (make-instance
+                                                 'vk:device-queue-create-info
+                                                 :queue-family-index ,gfx
+                                                 :queue-priorities '(0.0)))
+                                            (list
+                                             (make-instance
+                                              'vk:device-queue-create-info
+                                              :queue-family-index ,gfx
+                                              :queue-priorities '(0.0))
+                                             (make-instance
+                                              'vk:device-queue-create-info
+                                              :queue-family-index ,present
+                                              :queue-priorities '(0.0))))
+                                         `(list
+                                           (make-instance
+                                            'vk:device-queue-create-info
+                                            :queue-family-index (find-graphics-queue-family-index ,physical-device)
+                                            :queue-priorities '(0.0))))))))
+       (unwind-protect
+            (progn ,@body)
+         (vk:destroy-device ,device)))))
+
+(defmacro with-instance-and-device ((instance device physical-device &key (app-name "sample") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation)) (surface nil)) &body body)
   `(with-instance (,instance
                    :app-name,app-name
                    :window-extensions ,window-extensions
                    :log-levels ,log-levels
                    :message-types ,message-types)
-     (with-device (,device ,instance ,physical-device)
+     (with-device (,device ,instance ,physical-device ,surface)
        (progn ,@body))))
 
+(defmacro with-surface ((surface instance) &body body)
+  `(let ((,surface (glfw:create-window-surface ,instance glfw:*window* vk:*default-allocator*)))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-surface-khr ,instance ,surface))))
+
+(defmacro with-gfx ((instance device physical-device surface
+                     &key
+                       (app-name "sample")
+                       (window-width 64)
+                       (window-height 64)
+                       (log-levels '(:warning :error))
+                       (message-types '(:validation)))
+                    &body body)
+  `(glfw:with-init-window (:title ,app-name
+                           :window-width ,window-width
+                           :wind-height ,window-height
+                           :client-api :no-api)
+     (with-instance-and-device (,instance
+                                ,device
+                                ,physical-device
+                                :surface ,surface
+                                :app-name ,app-name
+                                :log-levels '(,@loglevels)
+                                :message-types '(,@message-types))
+       (with-surface (,surface ,instance)
+         (progn ,@body)))))

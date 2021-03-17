@@ -183,8 +183,12 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                    :window-extensions ,window-extensions
                    :log-levels ,log-levels
                    :message-types ,message-types)
-     (with-device (,device ,instance ,physical-device ,surface)
-       (progn ,@body))))
+     ,(if surface
+          `(with-surface (,surface ,instance)
+             (with-device (,device ,instance ,physical-device ,surface)
+               (progn ,@body)))
+          `(with-device (,device ,instance ,physical-device)
+             (progn ,@body)))))
 
 (defmacro with-surface ((surface instance) &body body)
   `(let ((,surface (glfw:create-window-surface ,instance glfw:*window* vk:*default-allocator*)))
@@ -192,11 +196,13 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
           (progn ,@body)
        (vk:destroy-surface-khr ,instance ,surface))))
 
+(defun make-default)
+
 (defmacro with-gfx ((instance device physical-device surface
                      &key
                        (app-name "sample")
-                       (window-width 64)
-                       (window-height 64)
+                       (window-width 500)
+                       (window-height 500)
                        (log-levels '(:warning :error))
                        (message-types '(:validation)))
                     &body body)
@@ -211,5 +217,4 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                 :app-name ,app-name
                                 :log-levels '(,@loglevels)
                                 :message-types '(,@message-types))
-       (with-surface (,surface ,instance)
-         (progn ,@body)))))
+       (progn ,@body))))

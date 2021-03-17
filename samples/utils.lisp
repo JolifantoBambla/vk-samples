@@ -120,9 +120,9 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
    (vk:get-physical-device-queue-family-properties physical-device)))
 
 (defun find-graphics-and-present-queue-family-indices (physical-device surface)
-  (let ((graphics-queue-family-index (find-graphics-queue-family-index physical-device))
-        (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device surface graphics-queue-family-index)
-                                      graphics-queue-family-index)))
+  (let* ((graphics-queue-family-index (find-graphics-queue-family-index physical-device))
+         (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device surface graphics-queue-family-index)
+                                       graphics-queue-family-index)))
     (unless present-queue-family-index
       (loop for q in queue-familiy-properties
             for i from 0
@@ -196,8 +196,6 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
           (progn ,@body)
        (vk:destroy-surface-khr ,instance ,surface))))
 
-(defun make-default)
-
 (defmacro with-gfx ((instance device physical-device surface
                      &key
                        (app-name "sample")
@@ -207,14 +205,14 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                        (message-types '(:validation)))
                     &body body)
   `(glfw:with-init-window (:title ,app-name
-                           :window-width ,window-width
-                           :wind-height ,window-height
+                           :width ,window-width
+                           :height ,window-height
                            :client-api :no-api)
      (with-instance-and-device (,instance
                                 ,device
                                 ,physical-device
                                 :surface ,surface
                                 :app-name ,app-name
-                                :log-levels '(,@loglevels)
-                                :message-types '(,@message-types))
+                                :log-levels (,@log-levels)
+                                :message-types (,@message-types))
        (progn ,@body))))

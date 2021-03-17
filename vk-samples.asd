@@ -20,6 +20,8 @@
                               :components ((:file "04-init-command-buffer")))
                              (:module "05-init-swapchain"
                               :components ((:file "05-init-swapchain")))
+                             (:module "06-init-depth-buffer"
+                              :components ((:file "06-init-depth-buffer")))
                              (:module "07-init-uniform-buffer"
                               :components ((:file "07-init-uniform-buffer")))
                              (:module "08-init-pipeline-layout"

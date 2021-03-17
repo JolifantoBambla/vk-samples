@@ -13,6 +13,8 @@
   (04-init-command-buffer)
   (format t "~%~%Running 05-init-swapchain!~%")
   (05-init-swapchain)
+  (format t "~%~%Running 06-init-depth-buffer!~%")
+  (06-init-depth-buffer)
   (format t "~%~%Running 07-init-uniform-buffer!~%")
   (07-init-uniform-buffer)
   (format t "~%~%Running 08-init-pipeline-layout!~%")

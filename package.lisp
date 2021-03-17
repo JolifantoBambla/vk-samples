@@ -51,11 +51,18 @@
    #:05-init-swapchain))
 
 (defpackage #:vk-samples/07-init-uniform-buffer
-  (:documentation "Shows how to create a uniform buffer.")
+  (:documentation "Shows how to create a uniform buffer and how to write and read from it.")
    (:use #:cl
          #:vk-samples/utils)
   (:export
    #:07-init-uniform-buffer))
+
+(defpackage #:vk-samples/08-init-pipeline-layout
+  (:documentation "Shows how to create and destroy a Vulkan pipeline layout.")
+   (:use #:cl
+         #:vk-samples/utils)
+  (:export
+   #:08-init-pipeline-layout))
 
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
@@ -86,6 +93,8 @@
                 #:05-init-swapchain)
   (:import-from #:vk-samples/07-init-uniform-buffer
                 #:07-init-uniform-buffer)
+  (:import-from #:vk-samples/08-init-pipeline-layout
+                #:08-init-pipeline-layout)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -97,6 +106,7 @@
    #:04-init-command-buffer
    #:05-init-swapchain
    #:07-init-uniform-buffer
+   #:08-init-pipeline-layout
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

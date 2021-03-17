@@ -62,7 +62,7 @@
    (:use #:cl
          #:vk-samples/utils)
   (:export
-   #:09-init-pipeline-layout))
+   #:08-init-pipeline-layout))
 
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
@@ -106,7 +106,7 @@
    #:04-init-command-buffer
    #:05-init-swapchain
    #:07-init-uniform-buffer
-   #:07-init-pipeline-layout
+   #:08-init-pipeline-layout
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

@@ -6,6 +6,9 @@
    #:*api-version*
    #:*vk-validation-layer-name*
    #:memcpy
+   #:with-allocated-memory
+   #:with-mapped-memory
+   #:copy-to-device
    #:make-default-application-info
    #:make-default-debug-utils-messenger-create-info
    #:with-instance

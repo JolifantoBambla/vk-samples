@@ -56,6 +56,13 @@
   (:export
    #:05-init-swapchain))
 
+(defpackage #:vk-samples/06-init-depth-buffer
+  (:documentation "Shows how to create a depth buffer.")
+   (:use #:cl
+         #:vk-samples/utils)
+  (:export
+   #:06-init-depth-buffer))
+
 (defpackage #:vk-samples/07-init-uniform-buffer
   (:documentation "Shows how to create a uniform buffer and how to write and read from it.")
    (:use #:cl
@@ -97,6 +104,8 @@
                 #:04-init-command-buffer)
   (:import-from #:vk-samples/05-init-swapchain
                 #:05-init-swapchain)
+  (:import-from #:vk-samples/06-init-depth-buffer
+                #:06-init-depth-buffer)
   (:import-from #:vk-samples/07-init-uniform-buffer
                 #:07-init-uniform-buffer)
   (:import-from #:vk-samples/08-init-pipeline-layout
@@ -111,6 +120,7 @@
    #:03-init-device
    #:04-init-command-buffer
    #:05-init-swapchain
+   #:06-init-depth-buffer
    #:07-init-uniform-buffer
    #:08-init-pipeline-layout
    #:create-debug-utils-messenger

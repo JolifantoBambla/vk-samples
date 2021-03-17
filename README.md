@@ -15,6 +15,7 @@ Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindin
 | 03-init-device | Shows how to create and destroy a Vulkan device. |
 | 04-init-command-buffer | Shows how to create and destroy a command pool and allocate and free command buffers. |
 | 05-init-swapchain | Shows how to initialize a Vulkan swapchain. |
+| 06-init-depth-buffer | Shows how to create and destroy a depth buffer. |
 | 07-init-uniform-buffer | Shows how to create and destroy a uniform buffer and how to write and read memory from it. |
 | 08-init-pipeline-layout | Shows how to create and destroy a Vulkan pipeline layout. |
 | create-debug-utils-messenger | Shows how to create and destroy a debug callback. |

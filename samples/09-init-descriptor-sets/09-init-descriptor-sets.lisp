@@ -40,7 +40,7 @@
                                                                     :dst-binding 0
                                                                     :dst-array-element 0
                                                                     :descriptor-type :uniform-buffer
-                                                                    :buffer-info descriptor-buffer-info)))
+                                                                    :buffer-info (list descriptor-buffer-info))))
                           (vk:update-descriptor-sets device (list write-descriptor-set) nil))
                      (vk:free-descriptor-sets device descriptor-pool (list descriptor-set))))
               (vk:destroy-descriptor-pool device descriptor-pool))))))))

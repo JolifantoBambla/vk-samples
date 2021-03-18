@@ -23,19 +23,19 @@
      (vk:map-memory ,device ,memory ,offset ,size ,p-data)
      (unwind-protect
           (progn ,@body)
-       (vk:unmap-memory device memory))))
+       (vk:unmap-memory ,device ,memory))))
 
-(defun copy-to-device (device memory data data-type)
+(defun copy-to-device (device memory data data-type &optional (offset 0))
   "Copies data to device memory.
 DEVICE - a VkDevice handle
 MEMORY - a VkDeviceMemory handle
 DATA - lisp data to copy
 DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
-  (let ((data-count (cond
-                      ((listp data) (length data))
-                      ((arrayp data) (array-total-size data))
-                      (t 1)))
-        (data-size (* (cffi:foreign-type-size data-type) data-count)))
+  (let* ((data-count (cond
+                       ((listp data) (length data))
+                       ((arrayp data) (array-total-size data))
+                       (t 1)))
+         (data-size (* (cffi:foreign-type-size data-type) data-count)))
     (with-mapped-memory (p-mapped device memory offset data-size)
       (cffi:with-foreign-object (p-data data-type data-count)
         (dotimes (i data-count)
@@ -47,6 +47,21 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
         (memcpy (cffi:mem-aref p-mapped :pointer)
                 p-data
                 data-size)))))
+
+(defun find-type-index (physical-device memory-requirements)
+  (loop with memory-properties = (vk:get-physical-device-memory-properties physical-device)
+        with type-bits = (vk:memory-type-bits memory-requirements)
+        with requirements-mask = (cffi:foreign-bitfield-value '%vk:memory-property-flags
+                                                              '(:host-visible :host-coherent))
+        for i from 0 below (vk:memory-type-count memory-properties)
+        for property-flags = (cffi:foreign-bitfield-value '%vk:memory-property-flags
+                                                          (vk:property-flags (nth i (vk:memory-types memory-properties))))
+        if (and (logand type-bits 1)
+                (= (logand property-flags requirements-mask)
+                   requirements-mask))
+          return i
+        else
+          do (setf type-bits (ash type-bits -1))))
 
 (defmacro define-debug-utils-messenger-callback (name logger &optional (user-data-type nil))
   (let ((log-level (gensym))
@@ -216,3 +231,39 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                 :log-levels (,@log-levels)
                                 :message-types (,@message-types))
        (progn ,@body))))
+
+(defmacro with-uniform-buffer ((buffer buffer-memory memory-requirements device physical-device size type &key (initial-contents nil)) &body body)
+  `(let ((,buffer (vk:create-buffer ,device
+                                    (make-instance 'vk:buffer-create-info
+                                                   :usage :uniform-buffer
+                                                   :sharing-mode :exclusive
+                                                   :size ,size))))
+     (unwind-protect
+          (let ((,memory-requirements (vk:get-buffer-memory-requirements ,device ,buffer)))
+            (with-allocated-memory (,buffer-memory
+                                    ,device
+                                    (make-instance 'vk:memory-allocate-info
+                                                   :allocation-size (vk:size ,memory-requirements)
+                                                   :memory-type-index (find-type-index ,physical-device
+                                                                                       ,memory-requirements)))
+              ,(when initial-contents
+                 `(copy-to-device ,device
+                                  ,buffer-memory
+                                  ,initial-contents
+                                  ,type))
+              (progn ,@body)))
+       (vk:destroy-buffer ,device ,buffer))))
+
+(defmacro with-simple-descriptor-set-layout ((descriptor-set-layout device) &body body)
+  `(let ((,descriptor-set-layout (vk:create-descriptor-set-layout
+                                  ,device
+                                  (make-instance 'vk:descriptor-set-layout-create-info
+                                                 :bindings (list
+                                                            (make-instance 'vk:descriptor-set-layout-binding
+                                                                           :binding 0
+                                                                           :descriptor-type :uniform-buffer
+                                                                           :descriptor-count 1
+                                                                           :stage-flags :vertex))))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-descriptor-set-layout ,device ,descriptor-set-layout))))

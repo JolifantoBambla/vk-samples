@@ -10,6 +10,7 @@
   :components ((:file "package")
                (:module "samples"
                 :components ((:file "utils")
+                             (:file "data")
                              (:module "01-init-instance"
                               :components ((:file "01-init-instance")))
                              (:module "02-enumerate-devices"
@@ -26,6 +27,8 @@
                               :components ((:file "07-init-uniform-buffer")))
                              (:module "08-init-pipeline-layout"
                               :components ((:file "08-init-pipeline-layout")))
+                             (:module "09-init-descriptor-sets"
+                              :components ((:file "09-init-descriptor-sets")))
                              (:module "create-debug-utils-messenger"
                               :components ((:file "create-debug-utils-messenger")))
                              (:module "create-debug-utils-messenger-next"

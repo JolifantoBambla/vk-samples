@@ -16,10 +16,18 @@
    #:with-instance-and-device
    #:with-surface
    #:with-gfx
+   #:with-uniform-buffer
+   #:with-simple-descriptor-set-layout
+   #:find-type-index
    #:find-graphics-queue-family-index
    #:find-graphics-and-present-queue-family-indices
    #:define-debug-utils-messenger-callback
    #:default-debug-utils-log-callback))
+
+(defpackage #:vk-samples/data
+  (:use #:cl)
+  (:export
+   #:make-mvpc))
 
 (defpackage #:vk-samples/01-init-instance
   (:documentation "Shows how to create and destroy a Vulkan instance.")
@@ -77,6 +85,14 @@
   (:export
    #:08-init-pipeline-layout))
 
+(defpackage #:vk-samples/09-init-descriptor-sets
+  (:documentation "Shows how to allocate descriptor sets and how to write to them.")
+   (:use #:cl
+         #:vk-samples/utils
+         #:vk-samples/data)
+  (:export
+   #:09-init-descriptor-sets))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -110,6 +126,8 @@
                 #:07-init-uniform-buffer)
   (:import-from #:vk-samples/08-init-pipeline-layout
                 #:08-init-pipeline-layout)
+  (:import-from #:vk-samples/09-init-descriptor-sets
+                #:09-init-descriptor-sets)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -123,6 +141,7 @@
    #:06-init-depth-buffer
    #:07-init-uniform-buffer
    #:08-init-pipeline-layout
+   #:09-init-descriptor-sets
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

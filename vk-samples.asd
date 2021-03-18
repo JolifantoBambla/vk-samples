@@ -10,6 +10,7 @@
   :components ((:file "package")
                (:module "samples"
                 :components ((:file "utils")
+                             (:file "data")
                              (:module "01-init-instance"
                               :components ((:file "01-init-instance")))
                              (:module "02-enumerate-devices"

@@ -16,10 +16,18 @@
    #:with-instance-and-device
    #:with-surface
    #:with-gfx
+   #:with-uniform-buffer
+   #:with-simple-descriptor-set-layout
+   #:find-type-index
    #:find-graphics-queue-family-index
    #:find-graphics-and-present-queue-family-indices
    #:define-debug-utils-messenger-callback
    #:default-debug-utils-log-callback))
+
+(defpackage #:vk-samples/data
+  (:use #:cl)
+  (:export
+   #:make-mvpc))
 
 (defpackage #:vk-samples/01-init-instance
   (:documentation "Shows how to create and destroy a Vulkan instance.")
@@ -78,9 +86,10 @@
    #:08-init-pipeline-layout))
 
 (defpackage #:vk-samples/09-init-descriptor-sets
-  (:documentation "Shows how to create and destroy descriptor sets.")
+  (:documentation "Shows how to allocate descriptor sets and how to write to them.")
    (:use #:cl
-         #:vk-samples/utils)
+         #:vk-samples/utils
+         #:vk-samples/data)
   (:export
    #:09-init-descriptor-sets))
 

@@ -77,6 +77,13 @@
   (:export
    #:08-init-pipeline-layout))
 
+(defpackage #:vk-samples/09-init-descriptor-sets
+  (:documentation "Shows how to create and destroy descriptor sets.")
+   (:use #:cl
+         #:vk-samples/utils)
+  (:export
+   #:09-init-descriptor-sets))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -110,6 +117,8 @@
                 #:07-init-uniform-buffer)
   (:import-from #:vk-samples/08-init-pipeline-layout
                 #:08-init-pipeline-layout)
+  (:import-from #:vk-samples/09-init-descriptor-sets
+                #:09-init-descriptor-sets)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -123,6 +132,7 @@
    #:06-init-depth-buffer
    #:07-init-uniform-buffer
    #:08-init-pipeline-layout
+   #:09-init-descriptor-sets
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

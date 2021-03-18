@@ -19,6 +19,8 @@
   (07-init-uniform-buffer)
   (format t "~%~%Running 08-init-pipeline-layout!~%")
   (08-init-pipeline-layout)
+  (format t "~%~%Running 09-init-descriptor-sets!~%")
+  (09-init-descriptor-sets)
   (format t "~%~%Running create-debug-utils-messenger!~%")
   (create-debug-utils-messenger)
   (format t "~%~%Running create-debug-utils-messenger-next!~%")

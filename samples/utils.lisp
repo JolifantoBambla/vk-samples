@@ -63,6 +63,19 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
         else
           do (setf type-bits (ash type-bits -1))))
 
+(defun pick-color-format (physical-device surface)
+  (let ((surface-formats (vk:get-physical-device-surface-formats-khr physical-device surface)))
+    (if (and (= (length surface-formats) 1)
+             (eq (first surface-formats) :undefined))
+        (progn
+          (setf (vk:format (first surface-formats)) :b8g8r8a8-unorm)
+          (setf (vk:color-space (first surface-formats)) :srgb-nonlinear-khr)
+          (first surface-formats))
+        (find-if (lambda (f)
+                   (and (member (vk:format f) '(:b8g8r8a8-unorm :r8g8b8a8-unorm :b8g8r8-unorm :r8g8b8-unorm))
+                        (eq (vk:color-space f) :srgb-nonlinear-khr)))
+                 surface-formats))))
+
 (defmacro define-debug-utils-messenger-callback (name logger &optional (user-data-type nil))
   (let ((log-level (gensym))
         (message-type (gensym))

@@ -21,6 +21,7 @@
    #:find-type-index
    #:find-graphics-queue-family-index
    #:find-graphics-and-present-queue-family-indices
+   #:pick-color-format
    #:define-debug-utils-messenger-callback
    #:default-debug-utils-log-callback))
 
@@ -93,6 +94,13 @@
   (:export
    #:09-init-descriptor-sets))
 
+(defpackage #:vk-samples/10-init-render-pass
+  (:documentation "Shows how to create and destroy a Vulkan render pass.")
+   (:use #:cl
+         #:vk-samples/utils)
+  (:export
+   #:10-init-render-pass))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -128,6 +136,8 @@
                 #:08-init-pipeline-layout)
   (:import-from #:vk-samples/09-init-descriptor-sets
                 #:09-init-descriptor-sets)
+  (:import-from #:vk-samples/10-init-render-pass
+                #:10-init-render-pass)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -142,6 +152,7 @@
    #:07-init-uniform-buffer
    #:08-init-pipeline-layout
    #:09-init-descriptor-sets
+   #:10-init-render-pass
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

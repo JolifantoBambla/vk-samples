@@ -29,6 +29,8 @@
                               :components ((:file "08-init-pipeline-layout")))
                              (:module "09-init-descriptor-sets"
                               :components ((:file "09-init-descriptor-sets")))
+                             (:module "10-init-render-pass"
+                              :components ((:file "10-init-render-pass")))
                              (:module "create-debug-utils-messenger"
                               :components ((:file "create-debug-utils-messenger")))
                              (:module "create-debug-utils-messenger-next"

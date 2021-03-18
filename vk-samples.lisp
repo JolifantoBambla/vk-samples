@@ -21,6 +21,8 @@
   (08-init-pipeline-layout)
   (format t "~%~%Running 09-init-descriptor-sets!~%")
   (09-init-descriptor-sets)
+  (format t "~%~%Running 10-init-render-pass!~%")
+  (10-init-render-pass)
   (format t "~%~%Running create-debug-utils-messenger!~%")
   (create-debug-utils-messenger)
   (format t "~%~%Running create-debug-utils-messenger-next!~%")

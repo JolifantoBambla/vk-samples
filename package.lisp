@@ -101,6 +101,13 @@
   (:export
    #:10-init-render-pass))
 
+(defpackage #:vk-samples/11-init-shaders
+  (:documentation "Shows how to create and destroy a Vulkan shader modules from SPIR-V binaries.")
+   (:use #:cl
+         #:vk-samples/utils)
+  (:export
+   #:11-init-shaders))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -138,6 +145,8 @@
                 #:09-init-descriptor-sets)
   (:import-from #:vk-samples/10-init-render-pass
                 #:10-init-render-pass)
+  (:import-from #:vk-samples/11-init-shaders
+                #:11-init-shaders)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -153,6 +162,7 @@
    #:08-init-pipeline-layout
    #:09-init-descriptor-sets
    #:10-init-render-pass
+   #:11-init-shaders
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

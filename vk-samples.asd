@@ -31,6 +31,8 @@
                               :components ((:file "09-init-descriptor-sets")))
                              (:module "10-init-render-pass"
                               :components ((:file "10-init-render-pass")))
+                             (:module "11-init-shaders"
+                              :components ((:file "11-init-shaders")))
                              (:module "create-debug-utils-messenger"
                               :components ((:file "create-debug-utils-messenger")))
                              (:module "create-debug-utils-messenger-next"

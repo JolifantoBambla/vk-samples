@@ -293,15 +293,15 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                            swapchain-extent
                            swapchain-images
                            swapchain-image-views
+                           swapchain-image-format
                            device
                            physical-device
                            surface
                            graphics-index
                            present-index)
                           &body body)
-  (let ((surface-capabilities (gensym))
-        (color-format (gensym)))
-    `(let* ((,color-format (vk:format (pick-color-format ,physical-device ,surface)))
+  (let ((surface-capabilities (gensym)))
+    `(let* ((,swapchain-image-format (vk:format (pick-color-format ,physical-device ,surface)))
             (,surface-capabilities (vk:get-physical-device-surface-capabilities-khr ,physical-device ,surface))
             (,swapchain-extent (determine-swapchain-extent ,physical-device ,surface))
             (,swapchain
@@ -310,7 +310,7 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                (make-instance 'vk:swapchain-create-info-khr
                               :surface ,surface
                               :min-image-count (vk:min-image-count ,surface-capabilities)
-                              :image-format ,color-format
+                              :image-format ,swapchain-image-format
                               :image-color-space :srgb-nonlinear-khr
                               :image-extent ,swapchain-extent
                               :image-array-layers 1
@@ -337,7 +337,7 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                               :clipped t))))
        (unwind-protect
             (let ((,swapchain-images (vk:get-swapchain-images-khr ,device ,swapchain)))
-              (with-swapchain-image-views (,swapchain-image-views ,swapchain-images ,device ,color-format)
+              (with-swapchain-image-views (,swapchain-image-views ,swapchain-images ,device ,swapchain-image-format)
                 (progn ,@body)))
          (vk:destroy-swapchain-khr ,device ,swapchain)))))
 
@@ -404,6 +404,60 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                     (vk:destroy-image-view ,device ,depth-image-view)))))
          (vk:destroy-image ,device ,depth-image)))))
 
+(defmacro with-render-pass ((render-pass device color-format depth-format) &body body)
+  `(let ((,render-pass
+           (vk:create-render-pass
+            ,device
+            (make-instance 'vk:render-pass-create-info
+                           :attachments (list
+                                         (make-instance 'vk:attachment-description
+                                                        :format ,color-format
+                                                        :samples :1
+                                                        :load-op :clear
+                                                        :store-op :store
+                                                        :stencil-load-op :dont-care
+                                                        :stencil-store-op :dont-care
+                                                        :initial-layout :undefined
+                                                        :final-layout :present-src-khr)
+                                         (make-instance 'vk:attachment-description
+                                                        :format ,depth-format
+                                                        :samples :1
+                                                        :load-op :clear
+                                                        :store-op :dont-care
+                                                        :stencil-load-op :dont-care
+                                                        :stencil-store-op :dont-care
+                                                        :initial-layout :undefined
+                                                        :final-layout :depth-stencil-attachment-optimal))
+                           :subpasses (list
+                                       (make-instance 'vk:subpass-description
+                                                      :pipeline-bind-point :graphics
+                                                      :color-attachments (list
+                                                                          (make-instance 'vk:attachment-reference
+                                                                                         :attachment 0
+                                                                                         :layout :color-attachment-optimal))
+                                                      :depth-stencil-attachment (list
+                                                                                 (make-instance 'vk:attachment-reference
+                                                                                                :attachment 1
+                                                                                                :layout :depth-stencil-attachment-optimal))))))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-render-pass ,device ,render-pass))))
+
+(defmacro with-framebuffer ((framebuffer device render-pass swapchain-image-view depth-image-view swapchain-extent) &body body)
+  `(let ((,framebuffer (vk:create-framebuffer
+                        ,device
+                        (make-instance 'vk:framebuffer-create-info
+                                       :render-pass ,render-pass
+                                       :attachments (list
+                                                     ,swapchain-image-view
+                                                     ,depth-image-view)
+                                       :width (vk:width ,swapchain-extent)
+                                       :height (vk:height ,swapchain-extent)
+                                       :layers 1))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-framebuffer ,device ,framebuffer))))
+
 (defmacro with-gfx ((instance
                      device
                      physical-device
@@ -412,8 +466,10 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                      swapchain-extent
                      swapchain-images
                      swapchain-image-views
+                     swapchain-image-format
                      depth-image
                      depth-image-view
+                     render-pass
                      graphics-index
                      present-index
                      &key
@@ -440,6 +496,7 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                         ,swapchain-extent
                         ,swapchain-images
                         ,swapchain-image-views
+                        ,swapchain-image-format
                         ,device
                         ,physical-device
                         ,surface
@@ -451,7 +508,11 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                              ,physical-device
                              ,depth-format
                              ,swapchain-extent)
-           (progn ,@body))))))
+           (with-render-pass (,render-pass
+                              ,device
+                              ,swapchain-image-format
+                              ,depth-format)
+               (progn ,@body)))))))
 
 (defmacro with-uniform-buffer ((buffer buffer-memory memory-requirements device physical-device size type &key (initial-contents nil)) &body body)
   `(let ((,buffer (vk:create-buffer ,device

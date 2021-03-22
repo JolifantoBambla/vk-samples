@@ -16,6 +16,8 @@
    #:with-instance-and-device
    #:with-surface
    #:with-swapchain
+   #:with-depth-buffer
+   #:with-render-pass
    #:with-gfx-base
    #:with-gfx
    #:with-uniform-buffer

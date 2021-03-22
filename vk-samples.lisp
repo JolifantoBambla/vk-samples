@@ -25,6 +25,8 @@
   (10-init-render-pass)
   (format t "~%~%Running 11-init-shaders!~%")
   (11-init-shaders)
+  (format t "~%~%Running 12-init-frame-buffers!~%")
+  (12-init-frame-buffers)
   (format t "~%~%Running create-debug-utils-messenger!~%")
   (create-debug-utils-messenger)
   (format t "~%~%Running create-debug-utils-messenger-next!~%")

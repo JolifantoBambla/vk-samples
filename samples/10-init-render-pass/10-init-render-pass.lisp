@@ -3,8 +3,8 @@
 (in-package #:vk-samples/10-init-render-pass)
 
 (defun 10-init-render-pass (&optional (app-name "10-init-render-pass") (window-width 64) (window-height 64))
-  ;; WITH-GFX in located in utils - check out the previous examples to see how to create an instance, a device and a surface
-  (with-gfx (instance device physical-device surface :app-name app-name :window-width window-width :window-height window-height)
+  ;; WITH-GFX-BASE in located in utils - check out the previous examples to see how to create an instance, a device and a surface
+  (with-gfx-base (instance device physical-device surface :app-name app-name :window-width window-width :window-height window-height)
     (let* ((color-format (vk:format (pick-color-format physical-device surface)))
            (depth-format :d16-unorm)
            (color-attachment-description (make-instance 'vk:attachment-description

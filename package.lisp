@@ -15,12 +15,17 @@
    #:with-device
    #:with-instance-and-device
    #:with-surface
+   #:with-swapchain
+   #:with-depth-buffer
+   #:with-render-pass
+   #:with-gfx-base
    #:with-gfx
    #:with-uniform-buffer
    #:with-simple-descriptor-set-layout
    #:find-type-index
    #:find-graphics-queue-family-index
    #:find-graphics-and-present-queue-family-indices
+   #:determine-swapchain-extent
    #:pick-color-format
    #:define-debug-utils-messenger-callback
    #:default-debug-utils-log-callback))
@@ -108,6 +113,13 @@
   (:export
    #:11-init-shaders))
 
+(defpackage #:vk-samples/12-init-frame-buffers
+  (:documentation "Shows how to create and destroy Vulkan frame buffers.")
+   (:use #:cl
+         #:vk-samples/utils)
+  (:export
+   #:12-init-frame-buffers))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -147,6 +159,8 @@
                 #:10-init-render-pass)
   (:import-from #:vk-samples/11-init-shaders
                 #:11-init-shaders)
+  (:import-from #:vk-samples/12-init-frame-buffers
+                #:12-init-frame-buffers)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -163,6 +177,7 @@
    #:09-init-descriptor-sets
    #:10-init-render-pass
    #:11-init-shaders
+   #:12-init-frame-buffers
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

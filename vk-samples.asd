@@ -6,7 +6,12 @@
   :license  "MIT"
   :version "0.0.1"
   :serial t
-  :depends-on (#:vk #:cffi #:cl-glfw3 #:rtg-math #:trivial-main-thread)
+  :depends-on (#:vk
+               #:alexandria
+               #:cffi
+               #:cl-glfw3
+               #:rtg-math
+               #:trivial-main-thread)
   :components ((:file "package")
                (:module "samples"
                 :components ((:file "utils")
@@ -33,6 +38,8 @@
                               :components ((:file "10-init-render-pass")))
                              (:module "11-init-shaders"
                               :components ((:file "11-init-shaders")))
+                             (:module "12-init-frame-buffers"
+                              :components ((:file "12-init-frame-buffers")))
                              (:module "create-debug-utils-messenger"
                               :components ((:file "create-debug-utils-messenger")))
                              (:module "create-debug-utils-messenger-next"

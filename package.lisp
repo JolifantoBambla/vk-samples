@@ -133,6 +133,14 @@
   (:export
    #:13-init-vertex-buffer))
 
+(defpackage #:vk-samples/14-init-pipeline
+  (:documentation "Shows how to create and destroy a graphics pipeline.")
+   (:use #:cl
+         #:vk-samples/utils
+         #:vk-samples/data)
+  (:export
+   #:14-init-pipeline))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -176,6 +184,8 @@
                 #:12-init-frame-buffers)
   (:import-from #:vk-samples/13-init-vertex-buffer
                 #:13-init-vertex-buffer)
+  (:import-from #:vk-samples/14-init-pipeline
+                #:14-init-pipeline)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -194,6 +204,7 @@
    #:11-init-shaders
    #:12-init-frame-buffers
    #:13-init-vertex-buffer
+   #:14-init-pipeline
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

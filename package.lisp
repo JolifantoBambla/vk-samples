@@ -5,6 +5,7 @@
   (:export
    #:*api-version*
    #:*vk-validation-layer-name*
+   #:*fence-timeout*
    #:memcpy
    #:with-allocated-memory
    #:with-mapped-memory
@@ -18,6 +19,9 @@
    #:with-swapchain
    #:with-depth-buffer
    #:with-render-pass
+   #:with-frame-buffers
+   #:with-command-pool
+   #:with-command-buffer
    #:with-gfx-base
    #:with-gfx
    #:with-uniform-buffer
@@ -33,7 +37,8 @@
 (defpackage #:vk-samples/data
   (:use #:cl)
   (:export
-   #:make-mvpc))
+   #:make-mvpc
+   #:make-colored-cube-data))
 
 (defpackage #:vk-samples/01-init-instance
   (:documentation "Shows how to create and destroy a Vulkan instance.")
@@ -120,6 +125,14 @@
   (:export
    #:12-init-frame-buffers))
 
+(defpackage #:vk-samples/13-init-vertex-buffer
+  (:documentation "Shows how to create and destroy a vertex buffer.")
+   (:use #:cl
+         #:vk-samples/utils
+         #:vk-samples/data)
+  (:export
+   #:13-init-vertex-buffer))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -161,6 +174,8 @@
                 #:11-init-shaders)
   (:import-from #:vk-samples/12-init-frame-buffers
                 #:12-init-frame-buffers)
+  (:import-from #:vk-samples/13-init-vertex-buffer
+                #:13-init-vertex-buffer)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -178,6 +193,7 @@
    #:10-init-render-pass
    #:11-init-shaders
    #:12-init-frame-buffers
+   #:13-init-vertex-buffer
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

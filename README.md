@@ -22,6 +22,7 @@ Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindin
 | 10-init-render-pass | Shows how to create and destroy a Vulkan render pass with a color and a depth attachment. |
 | 11-init-shaders | Shows how to create and destroy Vulkan shader modules from SPIR-V binaries. |
 | 12-init-frame-buffers | Shows how to create and destroy Vulkan framebuffers. |
+| 13-init-vertex-buffer | Shows how to create, fill and destroy a vertex buffer and how to record commands and submit them to a queue. |
 | create-debug-utils-messenger | Shows how to create and destroy a debug callback. |
 | create-debug-utils-messenger-next | Shows how to use the `NEXT` slot of a `VK:INSTANCE-CREATE-INFO` to create and destroy a debug callback alongside a Vulkan instance. |
 

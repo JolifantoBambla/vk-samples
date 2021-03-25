@@ -6,6 +6,8 @@
 
 (defparameter *api-version* (vk:make-api-version 1 2 153))
 
+(defparameter *fence-timeout* 100000000)
+
 ;; todo: memcpy should be in VK-UTILS
 (cffi:defcfun ("memcpy" memcpy) :pointer
   (dest :pointer)
@@ -443,20 +445,44 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
           (progn ,@body)
        (vk:destroy-render-pass ,device ,render-pass))))
 
-(defmacro with-framebuffer ((framebuffer device render-pass swapchain-image-view depth-image-view swapchain-extent) &body body)
-  `(let ((,framebuffer (vk:create-framebuffer
-                        ,device
-                        (make-instance 'vk:framebuffer-create-info
-                                       :render-pass ,render-pass
-                                       :attachments (list
-                                                     ,swapchain-image-view
-                                                     ,depth-image-view)
-                                       :width (vk:width ,swapchain-extent)
-                                       :height (vk:height ,swapchain-extent)
-                                       :layers 1))))
+(defmacro with-framebuffers ((framebuffers device render-pass swapchain-image-views depth-image-view swapchain-extent) &body body)
+  (let ((swapchain-image-view (gensym "SWAP-CHAIN-IMAGE-VIEW"))
+        (framebuffer (gensym "FRAME-BUFFER")))
+    `(let ((,framebuffers
+             (loop for ,swapchain-image-view in ,swapchain-image-views
+                   collect (vk:create-framebuffer ,device
+                                                  (make-instance 'vk:framebuffer-create-info
+                                                                 :render-pass ,render-pass
+                                                                 :attachments (list
+                                                                               ,swapchain-image-view
+                                                                               ,depth-image-view)
+                                                                 :width (vk:width ,swapchain-extent)
+                                                                 :height (vk:height ,swapchain-extent)
+                                                                 :layers 1)))))
+       (unwind-protect
+            (progn ,@body)
+         (loop for ,framebuffer in ,framebuffers
+               do (vk:destroy-framebuffer ,device ,framebuffer))))))
+
+(defmacro with-command-pool ((command-pool device queue-family-index) &body body)
+  `(let ((,command-pool
+           (vk:create-command-pool ,device
+                                   (make-instance 'vk:command-pool-create-info
+                                                  :queue-family-index ,queue-family-index))))
      (unwind-protect
           (progn ,@body)
-       (vk:destroy-framebuffer ,device ,framebuffer))))
+       (vk:destroy-command-pool ,device ,command-pool))))
+
+(defmacro with-command-buffer ((command-buffer device command-pool &key (level :primary)) &body body)
+  `(let ((,command-buffer
+           (first (vk:allocate-command-buffers ,device
+                                               (make-instance 'vk:command-buffer-allocate-info
+                                                :command-pool ,command-pool
+                                                :level ,level
+                                                :command-buffer-count 1)))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:free-command-buffers ,device ,command-pool (list ,command-buffer)))))
 
 (defmacro with-gfx ((instance
                      device
@@ -470,6 +496,9 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                      depth-image
                      depth-image-view
                      render-pass
+                     framebuffers
+                     command-pool
+                     graphics-queue
                      graphics-index
                      present-index
                      &key
@@ -512,7 +541,19 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                               ,device
                               ,swapchain-image-format
                               ,depth-format)
-               (progn ,@body)))))))
+             (with-framebuffers (,framebuffers
+                                 ,device
+                                 ,render-pass
+                                 ,swapchain-image-views
+                                 ,depth-image-view
+                                 ,swapchain-extent)
+               (with-command-pool (,command-pool
+                                   ,device
+                                   ,graphics-index)
+                 (let ((,graphics-queue (vk:get-device-queue ,device
+                                                             ,graphics-index
+                                                             0)))
+                   (progn ,@body))))))))))
 
 (defmacro with-uniform-buffer ((buffer buffer-memory memory-requirements device physical-device size type &key (initial-contents nil)) &body body)
   `(let ((,buffer (vk:create-buffer ,device

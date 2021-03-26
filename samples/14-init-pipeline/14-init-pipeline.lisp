@@ -23,96 +23,147 @@
              present-index
              :app-name app-name
              :window-width window-width
-             :window-height window-height)
-    (with-command-buffer (command-buffer
-                          device
-                          command-pool)
-      (let* ((colored-cube-data (make-colored-cube-data))
-             (vertex-buffer (vk:create-buffer device
-                                              (make-instance 'vk:buffer-create-info
-                                                             :size (* (cffi:foreign-type-size :float)
-                                                                      (length colored-cube-data))
-                                                             :usage :vertex-buffer
-                                                             :sharing-mode :exclusive))))
-        (unwind-protect
-             ;; the process of allocating memory and copying the data to the device is basically
-             ;; the same as in 07-INIT-UNIFORM-BUFFER
-             (let ((memory-requirements (vk:get-buffer-memory-requirements device vertex-buffer)))
-               (with-allocated-memory (memory
-                                       device
-                                       (make-instance 'vk:memory-allocate-info
-                                                      :allocation-size (vk:size memory-requirements)
-                                                      :memory-type-index (find-type-index physical-device
-                                                                                          memory-requirements)))
-                 (copy-to-device device
-                                 memory
-                                 colored-cube-data
-                                 :float)
-                 ;; we copied the data, but we still have to bind it to our vertex buffer!
-                 (vk:bind-buffer-memory device
-                                        vertex-buffer
-                                        memory
-                                        0)
-                 (let ((image-acquired-semaphore (vk:create-semaphore device
-                                                                     (make-instance 'vk:semaphore-create-info))))
-                   (unwind-protect
-                        (multiple-value-bind (next-image-index result)
-                            (vk:acquire-next-image-khr device
-                                                       swapchain
-                                                       *fence-timeout*
-                                                       image-acquired-semaphore)
-                          (assert (and (< next-image-index (length framebuffers))
-                                       (eq result :success))
-                                  () "Acquired next image index: ~a VkResult: ~a" next-image-index result)
-                          (let* ((clear-color-value (make-instance 'vk:clear-color-value
-                                                                   :float-32 (make-array 4
-                                                                                         :initial-contents '(0.2 0.2 0.2 0.2))))
-                                 (clear-depth-stencil (make-instance 'vk:clear-depth-stencil-value
-                                                                     :depth 1.0
-                                                                     :stencil 0))
-                                 (clear-values (list
-                                                (make-instance 'vk:clear-value
-                                                               :color clear-color-value)
-                                                (make-instance 'vk:clear-value
-                                                               :depth-stencil clear-depth-stencil)))
-                                 (render-pass-begin-info (make-instance 'vk:render-pass-begin-info
-                                                                        :render-pass render-pass
-                                                                        :framebuffer (nth next-image-index framebuffers)
-                                                                        :render-area (make-instance 'vk:rect-2d
-                                                                                                    :offset (make-instance 'vk:offset-2d
-                                                                                                                           :x 0
-                                                                                                                           :y 0)
-                                                                                                    :extent swapchain-extent)
-                                                                        :clear-values clear-values)))
-                            ;; now we can record some commands in our command buffer!
-                            (vk:begin-command-buffer command-buffer
-                                                     (make-instance 'vk:command-buffer-begin-info))
-                            (vk:cmd-begin-render-pass command-buffer
-                                                      :inline
-                                                      render-pass-begin-info)
-                            (vk:cmd-bind-vertex-buffers command-buffer
-                                                        (list vertex-buffer)
-                                                        0      ;; first binding
-                                                        '(0))  ;; offsets
-                            (vk:cmd-end-render-pass command-buffer)
-                            (vk:end-command-buffer command-buffer)
-
-                            ;; finally, we submit the command buffer and wait for the queue to finish processing it
-                            (let ((fence (vk:create-fence device
-                                                          (make-instance 'vk:fence-create-info))))
-                              (unwind-protect
-                                   (progn
-                                     (vk:queue-submit graphics-queue
-                                                      (list
-                                                       (make-instance 'vk:submit-info
-                                                                      :command-buffers (list command-buffer)))
-                                                      fence)
-                                     (loop while (eq :timeout
-                                                     (vk:wait-for-fences device
-                                                                         (list fence)
-                                                                         t ;; wait for all fences given to the the function
-                                                                         *fence-timeout*))
-                                           do (format t "Still waiting for our commands to finish!")))
-                                (vk:destroy-fence device fence)))))
-                     (vk:destroy-semaphore device image-acquired-semaphore)))))
-          (vk:destroy-buffer device vertex-buffer))))))
+             :window-height window-height
+             :log-levels (:info :warning :error))
+    (with-simple-descriptor-set-layout (descriptor-set-layout
+                                        device)
+      (with-simple-pipeline-layout (pipeline-layout
+                                    device
+                                    descriptor-set-layout)
+        (with-shader-module (vertex-shader-module
+                             device
+                             "vertex-shader.spv")
+          (with-shader-module (fragment-shader-module
+                               device
+                               "fragment-shader.spv")
+            (let* ((vertex-shader-stage-create-info (make-instance 'vk:pipeline-shader-stage-create-info
+                                                                   :stage :vertex
+                                                                   :module vertex-shader-module
+                                                                   :name "main"))
+                   (fragment-shader-stage-create-info (make-instance 'vk:pipeline-shader-stage-create-info
+                                                                     :stage :fragment
+                                                                     :module fragment-shader-module
+                                                                     :name "main"))
+                   (pipeline-shader-stage-create-infos (list
+                                                        vertex-shader-stage-create-info
+                                                        fragment-shader-stage-create-info))
+                   (vertex-input-binding-description (make-instance 'vk:vertex-input-binding-description
+                                                                    :binding 0
+                                                                    :stride (cffi:foreign-type-size :float)
+                                                                    :input-rate :vertex))
+                   (vertex-input-attribute-descriptions (list
+                                                         (make-instance 'vk:vertex-input-attribute-description
+                                                                        :location 0
+                                                                        :binding 0
+                                                                        :format :r32g32b32a32-sfloat
+                                                                        :offset 0)
+                                                         (make-instance 'vk:vertex-input-attribute-description
+                                                                        :location 1
+                                                                        :binding 1
+                                                                        :format :r32g32b32a32-sfloat
+                                                                        :offset 16)))
+                   (pipeline-vertex-input-state-create-info (make-instance 'vk:pipeline-vertex-input-state-create-info
+                                                                           :vertex-binding-descriptions (list vertex-input-binding-description)
+                                                                           :vertex-attribute-descriptions vertex-input-attribute-descriptions))
+                   (pipeline-input-assembly-state-create-info (make-instance 'vk:pipeline-input-assembly-state-create-info
+                                                                             :topology :triangle-list))
+                   (pipeline-viewport-state-create-info (make-instance 'vk:pipeline-viewport-state-create-info
+                                                                       :viewports (list (make-instance 'vk:viewport
+                                                                                                       :x 0.0
+                                                                                                       :y 0.0
+                                                                                                       :width (float (vk:width swapchain-extent))
+                                                                                                       :height (float (vk:height swapchain-extent))
+                                                                                                       :min-depth 0.0
+                                                                                                       :max-depth 1.0))
+                                                                       :scissors (list (make-instance 'vk:rect-2d
+                                                                                                      :offset (make-instance 'vk:offset-2d
+                                                                                                                             :x 0
+                                                                                                                             :y 0)
+                                                                                                      :extent swapchain-extent))))
+                   (pipeline-rasterization-state-create-info (make-instance 'vk:pipeline-rasterization-state-create-info
+                                                                            :depth-clamp-enable nil
+                                                                            :rasterizer-discard-enable nil
+                                                                            :polygon-mode :fill
+                                                                            :cull-mode :back
+                                                                            :front-face :clockwise
+                                                                            :depth-bias-enable nil
+                                                                            :depth-bias-constant-factor 0.0
+                                                                            :depth-bias-clamp 0.0
+                                                                            :depth-bias-slope-factor 0.0
+                                                                            :line-width 1.0))
+                   (pipeline-multisample-state-create-info (make-instance 'vk:pipeline-multisample-state-create-info
+                                                                          :rasterization-samples :1
+                                                                          :min-sample-shading 0.0
+                                                                          ;; todo: this needs to be fixed in vk!
+                                                                          :sample-mask (cffi:null-pointer)))
+                   (stencil-op-state (make-instance 'vk:stencil-op-state
+                                                    :fail-op :keep
+                                                    :pass-op :keep
+                                                    :depth-fail-op :keep
+                                                    :compare-op :always
+                                                    :compare-mask 0
+                                                    :write-mask 0
+                                                    :reference 0))
+                   (pipeline-depth-stencil-state-create-info (make-instance 'vk:pipeline-depth-stencil-state-create-info
+                                                                            :depth-test-enable t
+                                                                            :depth-write-enable t
+                                                                            :depth-compare-op :less-or-equal
+                                                                            :depth-bounds-test-enable nil
+                                                                            :stencil-test-enable nil
+                                                                            :front stencil-op-state
+                                                                            :back stencil-op-state
+                                                                            :min-depth-bounds 0.0
+                                                                            :max-depth-bounds 0.0))
+                   (color-component-flags '(:r :g :b :a))
+                   (pipeline-color-blend-attachment-state (make-instance 'vk:pipeline-color-blend-attachment-state
+                                                                         :blend-enable nil
+                                                                         :src-color-blend-factor :zero
+                                                                         :dst-color-blend-factor :zero
+                                                                         :color-blend-op :add
+                                                                         :src-alpha-blend-factor :zero
+                                                                         :dst-alpha-blend-factor :zero
+                                                                         :alpha-blend-op :add
+                                                                         :color-write-mask color-component-flags))
+                   (pipeline-color-blend-state-create-info (make-instance 'vk:pipeline-color-blend-state-create-info
+                                                                          :logic-op-enable nil
+                                                                          :logic-op :no-op
+                                                                          :attachments (list pipeline-color-blend-attachment-state)
+                                                                          ;; todo: fix translation of array slots with fixed size
+                                                                          ;; e.g.: (cffi:lisp-array-to-foreign (vk:blend-constants value) %vk:blend-constants '(:array :float 4))
+                                                                          :blend-constants (make-array 4
+                                                                                                       :initial-contents '(1.0 1.0 1.0 1.0))))
+                   (dynamic-states '(:viewport :scissor))
+                   (pipeline-dynamic-state-create-info (make-instance 'vk:pipeline-dynamic-state-create-info
+                                                                      :dynamic-states dynamic-states))
+                   (graphics-pipeline-create-info (make-instance 'vk:graphics-pipeline-create-info
+                                                                 :stages pipeline-shader-stage-create-infos
+                                                                 :vertex-input-state pipeline-vertex-input-state-create-info
+                                                                 :input-assembly-state pipeline-input-assembly-state-create-info
+                                                                 :tessellation-state nil
+                                                                 :viewport-state pipeline-viewport-state-create-info
+                                                                 :rasterization-state pipeline-rasterization-state-create-info
+                                                                 :multisample-state pipeline-multisample-state-create-info
+                                                                 :depth-stencil-state pipeline-depth-stencil-state-create-info
+                                                                 :color-blend-state pipeline-color-blend-state-create-info
+                                                                 :dynamic-state pipeline-dynamic-state-create-info
+                                                                 :layout pipeline-layout
+                                                                 :render-pass render-pass
+                                                                 :subpass 0
+                                                                 :base-pipeline-index 0)))
+              (format t "creating pipelines!~%")
+              (multiple-value-bind (pipelines result)
+                  (vk:create-graphics-pipelines device
+                                                (list graphics-pipeline-create-info))
+                (unwind-protect
+                     (cond
+                       ((eq result :success)
+                        (format t "Successfully created ~a graphics pipeline(s)!~%"
+                                (length pipelines)))
+                       ((eq result :pipeline-compile-required-ext)
+                        (format t "VK:CREATE-GRAPHICS-PIPELINES returned: ~a~%"
+                                result))
+                       (t
+                        (error "VK:CREATE-GRAPHICS-PIPELINES failed with: ~a~%"
+                               result)))
+                  (loop for pipeline in pipelines
+                        do (vk:destroy-pipeline device pipeline)))))))))))

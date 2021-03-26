@@ -19,6 +19,7 @@
    #:with-swapchain
    #:with-depth-buffer
    #:with-render-pass
+   #:with-shader-module
    #:with-frame-buffers
    #:with-command-pool
    #:with-command-buffer
@@ -26,6 +27,7 @@
    #:with-gfx
    #:with-uniform-buffer
    #:with-simple-descriptor-set-layout
+   #:with-simple-pipeline-layout
    #:find-type-index
    #:find-graphics-queue-family-index
    #:find-graphics-and-present-queue-family-indices

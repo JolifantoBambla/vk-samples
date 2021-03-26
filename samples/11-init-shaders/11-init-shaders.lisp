@@ -11,15 +11,15 @@
                                (asdf:system-relative-pathname
                                 'vk-samples
                                 (make-pathname :directory '(:relative "samples" "11-init-shaders"))))))
-               (with-open-file (stream file-path :element-type '(unsigned-byte 8))
+               (with-open-file (stream file-path :element-type '(unsigned-byte 32))
                  (let ((shader-code (make-array 1024
-                                                :element-type '(unsigned-byte 8)
+                                                :element-type '(unsigned-byte 32)
                                                 :adjustable t
                                                 :fill-pointer 0)))
                    (loop for b = (read-byte stream nil nil)
                          while b
                          do (vector-push-extend b shader-code)
-                         finally (return shader-code)))))))
+                         finally (return (adjust-array shader-code (length shader-code)))))))))
       (let* ((vertex-shader-module-create-info
                (make-instance 'vk:shader-module-create-info
                               :code (read-shader-file "vertex-shader.spv")))

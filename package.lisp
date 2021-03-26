@@ -28,6 +28,7 @@
    #:with-uniform-buffer
    #:with-simple-descriptor-set-layout
    #:with-simple-pipeline-layout
+   #:read-shader-source
    #:find-type-index
    #:find-graphics-queue-family-index
    #:find-graphics-and-present-queue-family-indices

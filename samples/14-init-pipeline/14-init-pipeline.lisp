@@ -49,7 +49,7 @@
                                                         fragment-shader-stage-create-info))
                    (vertex-input-binding-description (make-instance 'vk:vertex-input-binding-description
                                                                     :binding 0
-                                                                    :stride (cffi:foreign-type-size :float)
+                                                                    :stride (* (cffi:foreign-type-size :float) 8)
                                                                     :input-rate :vertex))
                    (vertex-input-attribute-descriptions (list
                                                          (make-instance 'vk:vertex-input-attribute-description
@@ -59,14 +59,15 @@
                                                                         :offset 0)
                                                          (make-instance 'vk:vertex-input-attribute-description
                                                                         :location 1
-                                                                        :binding 1
+                                                                        :binding 0
                                                                         :format :r32g32b32a32-sfloat
                                                                         :offset 16)))
                    (pipeline-vertex-input-state-create-info (make-instance 'vk:pipeline-vertex-input-state-create-info
                                                                            :vertex-binding-descriptions (list vertex-input-binding-description)
                                                                            :vertex-attribute-descriptions vertex-input-attribute-descriptions))
                    (pipeline-input-assembly-state-create-info (make-instance 'vk:pipeline-input-assembly-state-create-info
-                                                                             :topology :triangle-list))
+                                                                             :topology :triangle-list
+                                                                             :primitive-restart-enable nil))
                    (pipeline-viewport-state-create-info (make-instance 'vk:pipeline-viewport-state-create-info
                                                                        :viewports (list (make-instance 'vk:viewport
                                                                                                        :x 0.0
@@ -95,7 +96,10 @@
                                                                           :rasterization-samples :1
                                                                           :min-sample-shading 0.0
                                                                           ;; todo: this needs to be fixed in vk!
-                                                                          :sample-mask (cffi:null-pointer)))
+                                                                          :sample-mask (cffi:null-pointer)
+                                                                          :sample-shading-enable nil
+                                                                          :alpha-to-coverage-enable nil
+                                                                          :alpha-to-one-enable nil))
                    (stencil-op-state (make-instance 'vk:stencil-op-state
                                                     :fail-op :keep
                                                     :pass-op :keep
@@ -149,8 +153,8 @@
                                                                  :layout pipeline-layout
                                                                  :render-pass render-pass
                                                                  :subpass 0
-                                                                 :base-pipeline-index 0)))
-              (format t "creating pipelines!~%")
+                                                                 :base-pipeline-handle nil
+                                                                 :base-pipeline-index -1)))
               (multiple-value-bind (pipelines result)
                   (vk:create-graphics-pipelines device
                                                 (list graphics-pipeline-create-info))

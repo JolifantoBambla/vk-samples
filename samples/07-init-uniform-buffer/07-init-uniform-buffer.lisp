@@ -93,10 +93,6 @@
                       (unwind-protect
                            (cffi:with-foreign-object (mvpc-data :float  (array-total-size mvpc))
                              (memcpy mvpc-data (cffi:mem-aref p-data :pointer) size-of-mvpc)
-                             (vk:bind-buffer-memory device
-                                                    uniform-data-buffer
-                                                    uniform-data-memory
-                                                    0) ;; offset
                              (format t "This is the data that has been read from the device:~%~a~%"
                                      (m:to-string
                                       (rtg-math:m! (loop for i from 0 below (array-total-size mvpc)

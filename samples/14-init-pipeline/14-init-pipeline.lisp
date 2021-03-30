@@ -95,8 +95,7 @@
                    (pipeline-multisample-state-create-info (make-instance 'vk:pipeline-multisample-state-create-info
                                                                           :rasterization-samples :1
                                                                           :min-sample-shading 0.0
-                                                                          ;; todo: this needs to be fixed in vk!
-                                                                          :sample-mask (cffi:null-pointer)
+                                                                          :sample-mask nil
                                                                           :sample-shading-enable nil
                                                                           :alpha-to-coverage-enable nil
                                                                           :alpha-to-one-enable nil))
@@ -132,8 +131,6 @@
                                                                           :logic-op-enable nil
                                                                           :logic-op :no-op
                                                                           :attachments (list pipeline-color-blend-attachment-state)
-                                                                          ;; todo: fix translation of array slots with fixed size
-                                                                          ;; e.g.: (cffi:lisp-array-to-foreign (vk:blend-constants value) %vk:blend-constants '(:array :float 4))
                                                                           :blend-constants (make-array 4
                                                                                                        :initial-contents '(1.0 1.0 1.0 1.0))))
                    (dynamic-states '(:viewport :scissor))

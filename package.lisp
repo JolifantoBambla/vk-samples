@@ -27,6 +27,8 @@
    #:with-gfx
    #:with-uniform-buffer
    #:with-simple-descriptor-set-layout
+   #:with-simple-descriptor-pool
+   #:with-simple-descriptor-set
    #:with-simple-pipeline-layout
    #:with-simple-graphics-pipeline
    #:read-shader-source

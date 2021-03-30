@@ -2,7 +2,7 @@
 
 (in-package #:vk-samples/15-draw-cube)
 
-(defun 15-draw-cube (&optional (show-cube-seconds 1) (app-name "15-draw-cube") (window-width 500) (window-height 500))
+(defun 15-draw-cube (&optional (show-cube-seconds 1) (app-name "15-draw-cube") (window-width 500) (window-height 600))
   ;; WITH-GFX is a bit convoluted, but it contains everything from the previous samples
   (with-gfx (instance
              device
@@ -37,4 +37,23 @@
                                         swapchain-extent
                                         "vertex-shader.spv"
                                         "fragment-shader.spv")
-          (format t "stub for 15-draw-cube!~%"))))))
+          (multiple-value-bind (mvpc size-of-mvpc) (make-mvpc)
+            (with-uniform-buffer (uniform-buffer
+                                  uniform-buffer-memory
+                                  uniform-buffer-memory-requirements
+                                  device
+                                  physical-device
+                                  size-of-mvpc
+                                  :float
+                                  :initial-contents mvpc)
+              (with-simple-descriptor-set (descriptor-set
+                                           descriptor-pool
+                                           device
+                                           descriptor-set-layout
+                                           uniform-buffer
+                                           size-of-mvpc)
+                (multiple-value-bind (cube-data size-of-cube) (make-colored-cube-data)
+                  ;; todo: with-vertex-buffer
+                  ;; render pass
+                  ;; present
+                  (format t "stub for 15-draw-cube!~%"))))))))))

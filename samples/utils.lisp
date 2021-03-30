@@ -778,3 +778,42 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
            (unwind-protect
                 (progn ,@body)
              (vk:destroy-pipeline ,device ,graphics-pipeline)))))))
+
+(defmacro with-simple-descriptor-pool ((descriptor-pool device) &body body)
+  `(let ((,descriptor-pool
+           (vk:create-descriptor-pool
+            ,device
+            (make-instance 'vk:descriptor-pool-create-info
+                           :flags :free-descriptor-set
+                           :max-sets 1
+                           :pool-sizes (list (make-instance 'vk:descriptor-pool-size
+                                                            :type :uniform-buffer
+                                                            :descriptor-count 1))))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-descriptor-pool ,device ,descriptor-pool))))
+
+(defmacro with-simple-descriptor-set ((descriptor-set descriptor-pool device descriptor-set-layout uniform-buffer size) &body body)
+  `(with-simple-descriptor-pool (,descriptor-pool
+                                 ,device)
+     (let ((,descriptor-set (first (vk:allocate-descriptor-sets
+                                    ,device
+                                    (make-instance 'vk:descriptor-set-allocate-info
+                                                   :descriptor-pool ,descriptor-pool
+                                                   :set-layouts (list ,descriptor-set-layout))))))
+       (unwind-protect
+            (progn
+              (vk:update-descriptor-sets ,device
+                                         (list
+                                          (make-instance 'vk:write-descriptor-set
+                                                         :dst-set ,descriptor-set
+                                                         :dst-binding 0
+                                                         :dst-array-element 0
+                                                         :descriptor-type :uniform-buffer
+                                                         :buffer-info (list  (make-instance 'vk:descriptor-buffer-info
+                                                                                            :buffer ,uniform-buffer
+                                                                                            :offset 0
+                                                                                            :range ,size))))
+                                         nil)
+              ,@body)
+         (vk:free-descriptor-sets ,device ,descriptor-pool (list ,descriptor-set))))))

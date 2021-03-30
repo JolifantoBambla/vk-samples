@@ -28,6 +28,7 @@
    #:with-uniform-buffer
    #:with-simple-descriptor-set-layout
    #:with-simple-pipeline-layout
+   #:with-simple-graphics-pipeline
    #:read-shader-source
    #:find-type-index
    #:find-graphics-queue-family-index
@@ -144,6 +145,14 @@
   (:export
    #:14-init-pipeline))
 
+(defpackage #:vk-samples/15-draw-cube
+  (:documentation "Shows how to draw a coloured cube using the Vulkan API.")
+   (:use #:cl
+         #:vk-samples/utils
+         #:vk-samples/data)
+  (:export
+   #:15-draw-cube))
+
 (defpackage #:vk-samples/create-debug-utils-messenger
   (:documentation "Shows how to create and destroy a debug callback.")
    (:use #:cl
@@ -189,6 +198,8 @@
                 #:13-init-vertex-buffer)
   (:import-from #:vk-samples/14-init-pipeline
                 #:14-init-pipeline)
+  (:import-from #:vk-samples/15-draw-cube
+                #:15-draw-cube)
   (:import-from #:vk-samples/create-debug-utils-messenger
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
@@ -208,6 +219,7 @@
    #:12-init-frame-buffers
    #:13-init-vertex-buffer
    #:14-init-pipeline
+   #:15-draw-cube
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:run-all-samples))

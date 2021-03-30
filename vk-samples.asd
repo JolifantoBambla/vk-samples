@@ -44,6 +44,8 @@
                               :components ((:file "13-init-vertex-buffer")))
                              (:module "14-init-pipeline"
                               :components ((:file "14-init-pipeline")))
+                             (:module "15-draw-cube"
+                              :components ((:file "15-draw-cube")))
                              (:module "create-debug-utils-messenger"
                               :components ((:file "create-debug-utils-messenger")))
                              (:module "create-debug-utils-messenger-next"

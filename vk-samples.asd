@@ -42,6 +42,8 @@
                               :components ((:file "12-init-frame-buffers")))
                              (:module "13-init-vertex-buffer"
                               :components ((:file "13-init-vertex-buffer")))
+                             (:module "14-init-pipeline"
+                              :components ((:file "14-init-pipeline")))
                              (:module "create-debug-utils-messenger"
                               :components ((:file "create-debug-utils-messenger")))
                              (:module "create-debug-utils-messenger-next"

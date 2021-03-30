@@ -185,19 +185,20 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                          `(multiple-value-bind (,gfx ,present)
                                               (find-graphics-and-present-queue-family-indices ,physical-device ,surface)
                                             (if (= ,gfx ,present)
-                                                (make-instance
-                                                 'vk:device-queue-create-info
-                                                 :queue-family-index ,gfx
-                                                 :queue-priorities '(0.0)))
-                                            (list
-                                             (make-instance
-                                              'vk:device-queue-create-info
-                                              :queue-family-index ,gfx
-                                              :queue-priorities '(0.0))
-                                             (make-instance
-                                              'vk:device-queue-create-info
-                                              :queue-family-index ,present
-                                              :queue-priorities '(0.0))))
+                                                (list
+                                                 (make-instance
+                                                  'vk:device-queue-create-info
+                                                  :queue-family-index ,gfx
+                                                  :queue-priorities '(0.0)))
+                                                (list
+                                                 (make-instance
+                                                  'vk:device-queue-create-info
+                                                  :queue-family-index ,gfx
+                                                  :queue-priorities '(0.0))
+                                                 (make-instance
+                                                  'vk:device-queue-create-info
+                                                  :queue-family-index ,present
+                                                  :queue-priorities '(0.0)))))
                                          `(list
                                            (make-instance
                                             'vk:device-queue-create-info
@@ -277,8 +278,8 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                     :format ,image-format
                                     :components (make-instance 'vk:component-mapping
                                                                :r :r
+                                                               :g :g
                                                                :b :b
-                                                               :g :b
                                                                :a :a)
                                     :subresource-range (make-instance 'vk:image-subresource-range
                                                                       :aspect-mask :color
@@ -445,6 +446,31 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
           (progn ,@body)
        (vk:destroy-render-pass ,device ,render-pass))))
 
+(defun read-shader-source (shader-path)
+  (with-open-file (stream shader-path :element-type '(unsigned-byte 32))
+                 (let ((shader-code (make-array 1024
+                                                :element-type '(unsigned-byte 32)
+                                                :adjustable t
+                                                :fill-pointer 0)))
+                   (loop for b = (read-byte stream nil nil)
+                         while b
+                         do (vector-push-extend b shader-code)
+                         finally (return (adjust-array shader-code (length shader-code)))))))
+
+(defmacro with-shader-module ((shader-module device shader-file-name) &body body)
+  `(let ((,shader-module
+           (vk:create-shader-module ,device
+                                    (make-instance 'vk:shader-module-create-info
+                                                   :code (read-shader-source
+                                                          (merge-pathnames
+                                                           ,shader-file-name
+                                                           (asdf:system-relative-pathname
+                                                            'vk-samples
+                                                            (make-pathname :directory '(:relative "shaders")))))))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-shader-module ,device ,shader-module))))
+
 (defmacro with-framebuffers ((framebuffers device render-pass swapchain-image-views depth-image-view swapchain-extent) &body body)
   (let ((swapchain-image-view (gensym "SWAP-CHAIN-IMAGE-VIEW"))
         (framebuffer (gensym "FRAME-BUFFER")))
@@ -574,6 +600,10 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                   ,buffer-memory
                                   ,initial-contents
                                   ,type))
+              (vk:bind-buffer-memory ,device
+                                     ,buffer
+                                     ,buffer-memory
+                                     0)
               (progn ,@body)))
        (vk:destroy-buffer ,device ,buffer))))
 
@@ -590,3 +620,11 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
      (unwind-protect
           (progn ,@body)
        (vk:destroy-descriptor-set-layout ,device ,descriptor-set-layout))))
+
+(defmacro with-simple-pipeline-layout ((pipeline-layout device descriptor-set-layout) &body body)
+  `(let ((,pipeline-layout (vk:create-pipeline-layout ,device
+                                                      (make-instance 'vk:pipeline-layout-create-info
+                                                                     :set-layouts (list ,descriptor-set-layout)))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-pipeline-layout ,device ,pipeline-layout))))

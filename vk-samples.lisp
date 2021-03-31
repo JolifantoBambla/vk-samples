@@ -31,6 +31,8 @@
   (13-init-vertex-buffer)
   (format t "~%~%Running 14-init-pipeline!~%")
   (14-init-pipeline)
+  (format t "~%~%Running 15-draw-cube!~%")
+  (15-draw-cube)
   (format t "~%~%Running create-debug-utils-messenger!~%")
   (create-debug-utils-messenger)
   (format t "~%~%Running create-debug-utils-messenger-next!~%")

@@ -115,6 +115,24 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                  :pfn-user-callback (cffi:get-callback 'default-debug-utils-log-callback)
                  :user-data (cffi:null-pointer)))
 
+(defun make-default-render-pass-begin-info (render-pass framebuffer extent &key (clear-color #(0.2 0.2 0.2 0.2)) (clear-depth 1.0) (clear-stencil 0))
+  (make-instance 'vk:render-pass-begin-info
+                 :render-pass render-pass
+                 :framebuffer framebuffer
+                 :render-area (make-instance 'vk:rect-2d
+                                             :offset (make-instance 'vk:offset-2d
+                                                                    :x 0
+                                                                    :y 0)
+                                             :extent extent)
+                 :clear-values (list
+                                (make-instance 'vk:clear-value
+                                               :color (make-instance 'vk:clear-color-value
+                                                                     :float-32 clear-color))
+                                (make-instance 'vk:clear-value
+                                               :depth-stencil (make-instance 'vk:clear-depth-stencil-value
+                                                                             :depth clear-depth
+                                                                             :stencil clear-stencil)))))
+
 (defmacro with-instance ((instance &key (app-name "sample-app") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
   (let ((extension-names (gensym "EXT-NAMES"))
         (layer-names (gensym "LAYER-NAMES"))
@@ -151,20 +169,20 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
 
 (defun find-graphics-and-present-queue-family-indices (physical-device surface)
   (let* ((graphics-queue-family-index (find-graphics-queue-family-index physical-device))
-         (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device surface graphics-queue-family-index)
+         (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device graphics-queue-family-index surface)
                                        graphics-queue-family-index)))
     (unless present-queue-family-index
       (loop for q in queue-familiy-properties
             for i from 0
             when (and (member :graphics (vk:queue-flags q))
-                      (vk:get-physical-device-surface-support-khr physical-device surface i))
+                      (vk:get-physical-device-surface-support-khr physical-device i surface))
             do (setf graphics-queue-family-index i)
                (setf present-queue-family-index i)
                (return)))
     (unless present-queue-family-index
       (loop for q in queue-family-properties
             for i from 0
-            when (vk:get-physical-device-surface-support-khr physical-device surface i)
+            when (vk:get-physical-device-surface-support-khr physical-device i surface)
             do (setf present-queue-family-index i)
                (return)))
     (unless present-queue-family-index
@@ -510,6 +528,25 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
           (progn ,@body)
        (vk:free-command-buffers ,device ,command-pool (list ,command-buffer)))))
 
+(defmacro record-command-buffer ((command-buffer) &body body)
+  `(progn
+     (vk:begin-command-buffer ,command-buffer
+                              (make-instance 'vk:command-buffer-begin-info))
+     (progn ,@body)
+     (vk:end-command-buffer ,command-buffer)))
+
+(defmacro with-semaphore ((semaphore device) &body body)
+  `(let ((,semaphore (vk:create-semaphore ,device (make-instance 'vk:semaphore-create-info))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-semaphore ,device ,semaphore))))
+
+(defmacro with-fence ((fence device) &body body)
+  `(let ((,fence (vk:create-fence ,device (make-instance 'vk:fence-create-info))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-fence ,device ,fence))))
+
 (defmacro with-gfx ((instance
                      device
                      physical-device
@@ -607,6 +644,31 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
               (progn ,@body)))
        (vk:destroy-buffer ,device ,buffer))))
 
+(defmacro with-vertex-buffer ((buffer buffer-memory memory-requirements device physical-device contents size &optional (type :float)) &body body)
+  `(let ((,buffer (vk:create-buffer ,device
+                                    (make-instance 'vk:buffer-create-info
+                                                   :usage :vertex-buffer
+                                                   :sharing-mode :exclusive
+                                                   :size ,size))))
+     (unwind-protect
+          (let ((,memory-requirements (vk:get-buffer-memory-requirements ,device ,buffer)))
+            (with-allocated-memory (,buffer-memory
+                                    ,device
+                                    (make-instance 'vk:memory-allocate-info
+                                                   :allocation-size (vk:size ,memory-requirements)
+                                                   :memory-type-index (find-type-index ,physical-device
+                                                                                       ,memory-requirements)))
+              (copy-to-device ,device
+                                  ,buffer-memory
+                                  ,contents
+                                  ,type)
+              (vk:bind-buffer-memory ,device
+                                     ,buffer
+                                     ,buffer-memory
+                                     0)
+              (progn ,@body)))
+       (vk:destroy-buffer ,device ,buffer))))
+
 (defmacro with-simple-descriptor-set-layout ((descriptor-set-layout device) &body body)
   `(let ((,descriptor-set-layout (vk:create-descriptor-set-layout
                                   ,device
@@ -628,3 +690,192 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
      (unwind-protect
           (progn ,@body)
        (vk:destroy-pipeline-layout ,device ,pipeline-layout))))
+
+(defmacro with-simple-graphics-pipeline ((graphics-pipeline
+                                          device
+                                          pipeline-layout
+                                          render-pass
+                                          swapchain-extent
+                                          vertex-shader-file-name
+                                          fragment-shader-file-name)
+                                         &body body)
+  (let ((vertex-shader-module (gensym))
+        (fragment-shader-module (gensym)))
+    `(with-shader-module (,vertex-shader-module
+                          ,device
+                          ,vertex-shader-file-name)
+       (with-shader-module (,fragment-shader-module
+                            ,device
+                            ,fragment-shader-file-name)
+         (let ((,graphics-pipeline
+                 (first
+                  (vk:create-graphics-pipelines
+                   ,device
+                   (list
+                    (make-instance
+                     'vk:graphics-pipeline-create-info
+                     :stages (list
+                              (make-instance
+                               'vk:pipeline-shader-stage-create-info
+                               :stage :vertex
+                               :module ,vertex-shader-module
+                               :name "main")
+                              (make-instance
+                               'vk:pipeline-shader-stage-create-info
+                               :stage :fragment
+                               :module ,fragment-shader-module
+                               :name "main"))
+                     :vertex-input-state (make-instance
+                                          'vk:pipeline-vertex-input-state-create-info
+                                          :vertex-binding-descriptions (list
+                                                                        (make-instance
+                                                                         'vk:vertex-input-binding-description
+                                                                         :binding 0
+                                                                         :stride (* (cffi:foreign-type-size :float) 8)
+                                                                         :input-rate :vertex))
+                                          :vertex-attribute-descriptions (list
+                                                                          (make-instance
+                                                                           'vk:vertex-input-attribute-description
+                                                                           :location 0
+                                                                           :binding 0
+                                                                           :format :r32g32b32a32-sfloat
+                                                                           :offset 0)
+                                                                          (make-instance
+                                                                           'vk:vertex-input-attribute-description
+                                                                           :location 1
+                                                                           :binding 0
+                                                                           :format :r32g32b32a32-sfloat
+                                                                           :offset 16)))
+                     :input-assembly-state (make-instance
+                                            'vk:pipeline-input-assembly-state-create-info
+                                            :topology :triangle-list
+                                            :primitive-restart-enable nil)
+                     :viewport-state (make-instance
+                                      'vk:pipeline-viewport-state-create-info
+                                      :viewports (list
+                                                  (make-instance
+                                                   'vk:viewport
+                                                   :x 0.0
+                                                   :y 0.0
+                                                   :width (float (vk:width ,swapchain-extent))
+                                                   :height (float (vk:height ,swapchain-extent))
+                                                   :min-depth 0.0
+                                                   :max-depth 1.0))
+                                      :scissors (list
+                                                 (make-instance
+                                                  'vk:rect-2d
+                                                  :offset (make-instance 'vk:offset-2d
+                                                                         :x 0
+                                                                         :y 0)
+                                                  :extent ,swapchain-extent)))
+                     :rasterization-state (make-instance
+                                           'vk:pipeline-rasterization-state-create-info
+                                           :depth-clamp-enable nil
+                                           :rasterizer-discard-enable nil
+                                           :polygon-mode :fill
+                                           :cull-mode :back
+                                           :front-face :clockwise
+                                           :depth-bias-enable nil
+                                           :depth-bias-constant-factor 0.0
+                                           :depth-bias-clamp 0.0
+                                           :depth-bias-slope-factor 0.0
+                                           :line-width 1.0)
+                     :multisample-state (make-instance
+                                         'vk:pipeline-multisample-state-create-info
+                                         :rasterization-samples :1
+                                         :min-sample-shading 0.0
+                                         :sample-mask nil
+                                         :sample-shading-enable nil
+                                         :alpha-to-coverage-enable nil
+                                         :alpha-to-one-enable nil)
+                     :depth-stencil-state (make-instance
+                                           'vk:pipeline-depth-stencil-state-create-info
+                                           :depth-test-enable t
+                                           :depth-write-enable t
+                                           :depth-compare-op :less-or-equal
+                                           :depth-bounds-test-enable nil
+                                           :stencil-test-enable nil
+                                           :front (make-instance
+                                                   'vk:stencil-op-state
+                                                   :fail-op :keep
+                                                   :pass-op :keep
+                                                   :depth-fail-op :keep
+                                                   :compare-op :always
+                                                   :compare-mask 0
+                                                   :write-mask 0
+                                                   :reference 0)
+                                           :back (make-instance
+                                                  'vk:stencil-op-state
+                                                  :fail-op :keep
+                                                  :pass-op :keep
+                                                  :depth-fail-op :keep
+                                                  :compare-op :always
+                                                  :compare-mask 0
+                                                  :write-mask 0
+                                                  :reference 0)
+                                           :min-depth-bounds 0.0
+                                           :max-depth-bounds 0.0)
+                     :color-blend-state (make-instance
+                                         'vk:pipeline-color-blend-state-create-info
+                                         :logic-op-enable nil
+                                         :logic-op :no-op
+                                         :attachments (list
+                                                       (make-instance
+                                                        'vk:pipeline-color-blend-attachment-state
+                                                        :blend-enable nil
+                                                        :src-color-blend-factor :zero
+                                                        :dst-color-blend-factor :zero
+                                                        :color-blend-op :add
+                                                        :src-alpha-blend-factor :zero
+                                                        :dst-alpha-blend-factor :zero
+                                                        :alpha-blend-op :add
+                                                        :color-write-mask '(:r :g :b :a)))
+                                         :blend-constants  #(1.0 1.0 1.0 1.0))
+                     :dynamic-state (make-instance
+                                     'vk:pipeline-dynamic-state-create-info
+                                     :dynamic-states '(:viewport :scissor))
+                     :layout ,pipeline-layout
+                     :render-pass ,render-pass
+                     :subpass 0))))))
+           (unwind-protect
+                (progn ,@body)
+             (vk:destroy-pipeline ,device ,graphics-pipeline)))))))
+
+(defmacro with-simple-descriptor-pool ((descriptor-pool device) &body body)
+  `(let ((,descriptor-pool
+           (vk:create-descriptor-pool
+            ,device
+            (make-instance 'vk:descriptor-pool-create-info
+                           :flags :free-descriptor-set
+                           :max-sets 1
+                           :pool-sizes (list (make-instance 'vk:descriptor-pool-size
+                                                            :type :uniform-buffer
+                                                            :descriptor-count 1))))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-descriptor-pool ,device ,descriptor-pool))))
+
+(defmacro with-simple-descriptor-set ((descriptor-set descriptor-pool device descriptor-set-layout uniform-buffer size) &body body)
+  `(with-simple-descriptor-pool (,descriptor-pool
+                                 ,device)
+     (let ((,descriptor-set (first (vk:allocate-descriptor-sets
+                                    ,device
+                                    (make-instance 'vk:descriptor-set-allocate-info
+                                                   :descriptor-pool ,descriptor-pool
+                                                   :set-layouts (list ,descriptor-set-layout))))))
+       (unwind-protect
+            (progn
+              (vk:update-descriptor-sets ,device
+                                         (list
+                                          (make-instance 'vk:write-descriptor-set
+                                                         :dst-set ,descriptor-set
+                                                         :dst-binding 0
+                                                         :dst-array-element 0
+                                                         :descriptor-type :uniform-buffer
+                                                         :buffer-info (list  (make-instance 'vk:descriptor-buffer-info
+                                                                                            :buffer ,uniform-buffer
+                                                                                            :offset 0
+                                                                                            :range ,size))))
+                                         nil)
+              ,@body)
+         (vk:free-descriptor-sets ,device ,descriptor-pool (list ,descriptor-set))))))

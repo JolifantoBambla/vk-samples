@@ -24,6 +24,7 @@ Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindin
 | 12-init-frame-buffers | Shows how to create and destroy Vulkan framebuffers. |
 | 13-init-vertex-buffer | Shows how to create, fill and destroy a vertex buffer and how to record commands and submit them to a queue. |
 | 14-init-pipeline | Shows how to create and destroy a Vulkan graphics pipeline. |
+| 15-draw-cube | This puts everything from the previous samples together and shows how to finally draw a cube onto a window. |
 | create-debug-utils-messenger | Shows how to create and destroy a debug callback. |
 | create-debug-utils-messenger-next | Shows how to use the `NEXT` slot of a `VK:INSTANCE-CREATE-INFO` to create and destroy a debug callback alongside a Vulkan instance. |
 

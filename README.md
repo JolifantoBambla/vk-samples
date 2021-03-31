@@ -2,12 +2,35 @@
 Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindings for the Vulkan API).
 
 ## Requirements
-*TODO*
+### Supported implementations & Operating systems
+`vk` has currently only been tested on `SBCL 2.0.0`, but other implementations might work as well.
 
-* `glfw3` for `cl-glfw`
-* `libffi` for `cl-glfw`
+`vk` has currently only been tested on Linux, but Windows should work as well.
+Some of the samples might also work on MacOS, but currently it is not guaranteed that samples using a window are run on the main thread (which is required for graphics applications on MacOS), so you might need to wrap them in a `(trivial-main-thread:with-body-in-main-thread)`.
+
+### CL dependencies
+#### Quicklisp
+* `alexandria`
+* `cffi`
+* `rtg-math`
+* `trivial-main-thread` (TODO: actually use this - [MacOS support](https://github.com/JolifantoBambla/vk-samples/issues/27))
+
+#### Not on Quicklisp (yet)
+* `vk`: Get it [here](https://github.com/JolifantoBambla/vk).
+* `cl-glfw`: The `cl-glfw` on Quicklisp does not (yet?) support Vulkan. There is an open pull request though, so this might change. In the meantime you can use [my fork](https://github.com/JolifantoBambla/cl-glfw3).
+
+### External dependencies
+* [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
+* [GLFW](https://www.glfw.org)
+* [libffi](http://sourceware.org/libffi)
 
 ## Samples
+The following table shows all currently available samples.
+You can either run them individually (e.g. `(vk-samples:01-init-instance)`) or run all of them using `(vk-samples:run-all-samples)`.
+As with the original [VulkanSamples by LunarG](https://github.com/LunarG/VulkanSamples) all samples prefixed with a number represent the progression from initializing a Vulkan instance to drawing a cube on screen.
+For the most part the things shown in the samples have also been refactored into the package `vk-samples/utils`, so later
+sample don't repeat too much from the earlier samples.
+
 | Name | Description |
 | -----| ----------- |
 | 01-init-instance | Shows how to create and destroy a Vulkan instance. |
@@ -27,8 +50,6 @@ Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindin
 | 15-draw-cube | This puts everything from the previous samples together and shows how to finally draw a cube onto a window. |
 | create-debug-utils-messenger | Shows how to create and destroy a debug callback. |
 | create-debug-utils-messenger-next | Shows how to use the `NEXT` slot of a `VK:INSTANCE-CREATE-INFO` to create and destroy a debug callback alongside a Vulkan instance. |
-
-You can also run `(vk-samples:run-all-samples)` to test all the samples above.
 
 ## Acknowledgements
 The samples in this repository closely follows the [VulkanSamples by LunarG](https://github.com/LunarG/VulkanSamples) as well as the samples for [Vulkan-Hpp](https://github.com/KhronosGroup/Vulkan-Hpp).

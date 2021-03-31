@@ -115,6 +115,24 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                  :pfn-user-callback (cffi:get-callback 'default-debug-utils-log-callback)
                  :user-data (cffi:null-pointer)))
 
+(defun make-default-render-pass-begin-info (render-pass framebuffer extent &key (clear-color #(0.2 0.2 0.2 0.2)) (clear-depth 1.0) (clear-stencil 0))
+  (make-instance 'vk:render-pass-begin-info
+                 :render-pass render-pass
+                 :framebuffer framebuffer
+                 :render-area (make-instance 'vk:rect-2d
+                                             :offset (make-instance 'vk:offset-2d
+                                                                    :x 0
+                                                                    :y 0)
+                                             :extent extent)
+                 :clear-values (list
+                                (make-instance 'vk:clear-value
+                                               :color (make-instance 'vk:clear-color-value
+                                                                     :float-32 clear-color))
+                                (make-instance 'vk:clear-value
+                                               :depth-stencil (make-instance 'vk:clear-depth-stencil-value
+                                                                             :depth clear-depth
+                                                                             :stencil clear-stencil)))))
+
 (defmacro with-instance ((instance &key (app-name "sample-app") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
   (let ((extension-names (gensym "EXT-NAMES"))
         (layer-names (gensym "LAYER-NAMES"))
@@ -151,20 +169,20 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
 
 (defun find-graphics-and-present-queue-family-indices (physical-device surface)
   (let* ((graphics-queue-family-index (find-graphics-queue-family-index physical-device))
-         (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device surface graphics-queue-family-index)
+         (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device graphics-queue-family-index surface)
                                        graphics-queue-family-index)))
     (unless present-queue-family-index
       (loop for q in queue-familiy-properties
             for i from 0
             when (and (member :graphics (vk:queue-flags q))
-                      (vk:get-physical-device-surface-support-khr physical-device surface i))
+                      (vk:get-physical-device-surface-support-khr physical-device i surface))
             do (setf graphics-queue-family-index i)
                (setf present-queue-family-index i)
                (return)))
     (unless present-queue-family-index
       (loop for q in queue-family-properties
             for i from 0
-            when (vk:get-physical-device-surface-support-khr physical-device surface i)
+            when (vk:get-physical-device-surface-support-khr physical-device i surface)
             do (setf present-queue-family-index i)
                (return)))
     (unless present-queue-family-index
@@ -510,6 +528,25 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
           (progn ,@body)
        (vk:free-command-buffers ,device ,command-pool (list ,command-buffer)))))
 
+(defmacro record-command-buffer ((command-buffer) &body body)
+  `(progn
+     (vk:begin-command-buffer ,command-buffer
+                              (make-instance 'vk:command-buffer-begin-info))
+     (progn ,@body)
+     (vk:end-command-buffer ,command-buffer)))
+
+(defmacro with-semaphore ((semaphore device) &body body)
+  `(let ((,semaphore (vk:create-semaphore ,device (make-instance 'vk:semaphore-create-info))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-semaphore ,device ,semaphore))))
+
+(defmacro with-fence ((fence device) &body body)
+  `(let ((,fence (vk:create-fence ,device (make-instance 'vk:fence-create-info))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-fence ,device ,fence))))
+
 (defmacro with-gfx ((instance
                      device
                      physical-device
@@ -600,6 +637,31 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                   ,buffer-memory
                                   ,initial-contents
                                   ,type))
+              (vk:bind-buffer-memory ,device
+                                     ,buffer
+                                     ,buffer-memory
+                                     0)
+              (progn ,@body)))
+       (vk:destroy-buffer ,device ,buffer))))
+
+(defmacro with-vertex-buffer ((buffer buffer-memory memory-requirements device physical-device contents size &optional (type :float)) &body body)
+  `(let ((,buffer (vk:create-buffer ,device
+                                    (make-instance 'vk:buffer-create-info
+                                                   :usage :vertex-buffer
+                                                   :sharing-mode :exclusive
+                                                   :size ,size))))
+     (unwind-protect
+          (let ((,memory-requirements (vk:get-buffer-memory-requirements ,device ,buffer)))
+            (with-allocated-memory (,buffer-memory
+                                    ,device
+                                    (make-instance 'vk:memory-allocate-info
+                                                   :allocation-size (vk:size ,memory-requirements)
+                                                   :memory-type-index (find-type-index ,physical-device
+                                                                                       ,memory-requirements)))
+              (copy-to-device ,device
+                                  ,buffer-memory
+                                  ,contents
+                                  ,type)
               (vk:bind-buffer-memory ,device
                                      ,buffer
                                      ,buffer-memory

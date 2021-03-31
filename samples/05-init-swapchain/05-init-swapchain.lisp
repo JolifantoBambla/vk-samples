@@ -37,14 +37,16 @@
                          ;; if we want to present images on our window surface we need a queue family which supports presentation
                          ;; most of the time a graphics queue family will support presentation as well, but this is not necessarily the case
                          ;; our quest to find a suitable queue family begins here
-                         (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device surface graphics-queue-family-index)
+                         (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device
+                                                                                                       graphics-queue-family-index
+                                                                                                       surface)
                                                        graphics-queue-family-index)))
                     ;; if our graphics queue family doesn't support presentation, we'll try to find a queue family which supports both
                     (unless present-queue-family-index
                       (loop for q in queue-familiy-properties
                             for i from 0
                             when (and (member :graphics (vk:queue-flags q))
-                                      (vk:get-physical-device-surface-support-khr physical-device surface i))
+                                      (vk:get-physical-device-surface-support-khr physical-device i surface))
                             do (setf graphics-queue-family-index i)
                                (setf present-queue-family-index i)
                                (return)))
@@ -52,7 +54,7 @@
                     (unless present-queue-family-index
                       (loop for q in queue-family-properties
                             for i from 0
-                            when (vk:get-physical-device-surface-support-khr physical-device surface i)
+                            when (vk:get-physical-device-surface-support-khr physical-device i surface)
                             do (setf present-queue-family-index i)
                                (return)))
                     ;; if there is really no queue family that supports presenting to a window surface we'll have to accept defeat...

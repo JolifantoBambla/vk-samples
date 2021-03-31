@@ -88,11 +88,11 @@
                             (vk:begin-command-buffer command-buffer
                                                      (make-instance 'vk:command-buffer-begin-info))
                             (vk:cmd-begin-render-pass command-buffer
-                                                      :inline
-                                                      render-pass-begin-info)
+                                                      render-pass-begin-info
+                                                      :inline)
                             (vk:cmd-bind-vertex-buffers command-buffer
-                                                        (list vertex-buffer)
                                                         0      ;; first binding
+                                                        (list vertex-buffer)
                                                         '(0))  ;; offsets
                             (vk:cmd-end-render-pass command-buffer)
                             (vk:end-command-buffer command-buffer)

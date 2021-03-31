@@ -12,6 +12,7 @@
    #:copy-to-device
    #:make-default-application-info
    #:make-default-debug-utils-messenger-create-info
+   #:make-default-render-pass-begin-info
    #:with-instance
    #:with-device
    #:with-instance-and-device
@@ -23,9 +24,13 @@
    #:with-frame-buffers
    #:with-command-pool
    #:with-command-buffer
+   #:record-command-buffer
+   #:with-semaphore
+   #:with-fence
    #:with-gfx-base
    #:with-gfx
    #:with-uniform-buffer
+   #:with-vertex-buffer
    #:with-simple-descriptor-set-layout
    #:with-simple-descriptor-pool
    #:with-simple-descriptor-set

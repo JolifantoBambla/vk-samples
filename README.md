@@ -14,10 +14,8 @@ Some of the samples might also work on MacOS, but currently it is not guaranteed
 * `cffi`
 * `rtg-math`
 * `trivial-main-thread` (TODO: actually use this - [MacOS support](https://github.com/JolifantoBambla/vk-samples/issues/27))
-
-#### Not on Quicklisp (yet)
-* `vk`: Get it [here](https://github.com/JolifantoBambla/vk).
-* `cl-glfw`: The `cl-glfw` on Quicklisp will support Vulkan with the next Quicklisp update (probably may 2021). In the meantime you can get it [here](https://github.com/AlexCharlton/cl-glfw3).
+* `vk`
+* `cl-glfw`
 
 ### External dependencies
 * [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)

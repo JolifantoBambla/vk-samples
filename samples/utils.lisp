@@ -8,12 +8,6 @@
 
 (defparameter *fence-timeout* 100000000)
 
-;; todo: memcpy should be in VK-UTILS
-(cffi:defcfun ("memcpy" memcpy) :pointer
-  (dest :pointer)
-  (src :pointer)
-  (count %vk:size-t))
-
 (defmacro with-allocated-memory ((memory device allocate-info) &body body)
   `(let ((,memory (vk:allocate-memory ,device ,allocate-info)))
      (unwind-protect
@@ -46,9 +40,9 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                   ((arrayp data) (aref data i))
                   ((listp data) (nth i data))
                   (t data))))
-        (memcpy (cffi:mem-aref p-mapped :pointer)
-                p-data
-                data-size)))))
+        (vk-utils:memcpy (cffi:mem-aref p-mapped :pointer)
+                         p-data
+                         data-size)))))
 
 (defun find-type-index (physical-device memory-requirements &optional (requirements '(:host-visible :host-coherent)))
   (loop with memory-properties = (vk:get-physical-device-memory-properties physical-device)
@@ -464,22 +458,11 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
           (progn ,@body)
        (vk:destroy-render-pass ,device ,render-pass))))
 
-(defun read-shader-source (shader-path)
-  (with-open-file (stream shader-path :element-type '(unsigned-byte 32))
-                 (let ((shader-code (make-array 1024
-                                                :element-type '(unsigned-byte 32)
-                                                :adjustable t
-                                                :fill-pointer 0)))
-                   (loop for b = (read-byte stream nil nil)
-                         while b
-                         do (vector-push-extend b shader-code)
-                         finally (return (adjust-array shader-code (length shader-code)))))))
-
 (defmacro with-shader-module ((shader-module device shader-file-name) &body body)
   `(let ((,shader-module
            (vk:create-shader-module ,device
                                     (make-instance 'vk:shader-module-create-info
-                                                   :code (read-shader-source
+                                                   :code (vk-utils:read-shader-source
                                                           (merge-pathnames
                                                            ,shader-file-name
                                                            (asdf:system-relative-pathname

@@ -6,7 +6,6 @@
    #:*api-version*
    #:*vk-validation-layer-name*
    #:*fence-timeout*
-   #:memcpy
    #:with-allocated-memory
    #:with-mapped-memory
    #:copy-to-device
@@ -36,7 +35,6 @@
    #:with-simple-descriptor-set
    #:with-simple-pipeline-layout
    #:with-simple-graphics-pipeline
-   #:read-shader-source
    #:find-type-index
    #:find-graphics-queue-family-index
    #:find-graphics-and-present-queue-family-indices

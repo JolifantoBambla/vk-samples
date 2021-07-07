@@ -74,10 +74,7 @@
                            (cffi:with-foreign-object (mvpc-data :float (array-total-size mvpc))
                              (dotimes (i (array-total-size mvpc))
                                (setf (cffi:mem-aref mvpc-data :float i) (aref mvpc i)))
-                             ;; NOTE: MEMCPY is not a function defined by VK. In the future it will be included in the
-                             ;; VK-UTILS package which will be a part of the VK-system.
-                             ;; Until that's the case, we'll use the function from VK-SAMPLES/UTILS.
-                             (memcpy (cffi:mem-aref p-data :pointer) mvpc-data size-of-mvpc)
+                             (vk-utils:memcpy (cffi:mem-aref p-data :pointer) mvpc-data size-of-mvpc)
                              (vk:bind-buffer-memory device
                                                     uniform-data-buffer
                                                     uniform-data-memory
@@ -92,7 +89,7 @@
                                      p-data)
                       (unwind-protect
                            (cffi:with-foreign-object (mvpc-data :float  (array-total-size mvpc))
-                             (memcpy mvpc-data (cffi:mem-aref p-data :pointer) size-of-mvpc)
+                             (vk-utils:memcpy mvpc-data (cffi:mem-aref p-data :pointer) size-of-mvpc)
                              (format t "This is the data that has been read from the device:~%~a~%"
                                      (m:to-string
                                       (rtg-math:m! (loop for i from 0 below (array-total-size mvpc)

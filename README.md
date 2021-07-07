@@ -3,9 +3,9 @@ Samples for [vk](https://github.com/JolifantoBambla/vk) (Common Lisp/CFFI bindin
 
 ## Requirements
 ### Supported implementations & Operating systems
-`vk` has currently only been tested on `SBCL 2.0.0`, but other implementations might work as well.
+See [vk](https://github.com/JolifantoBambla/vk) for supported CL implementations.
 
-`vk` has currently only been tested on Linux, but Windows should work as well.
+`vk-samples` has currently only been tested on Linux, but Windows should work as well.
 Some of the samples might also work on MacOS, but currently it is not guaranteed that samples using a window are run on the main thread (which is required for graphics applications on MacOS), so you might need to wrap them in a `(trivial-main-thread:with-body-in-main-thread)`.
 
 ### CL dependencies
@@ -14,10 +14,8 @@ Some of the samples might also work on MacOS, but currently it is not guaranteed
 * `cffi`
 * `rtg-math`
 * `trivial-main-thread` (TODO: actually use this - [MacOS support](https://github.com/JolifantoBambla/vk-samples/issues/27))
-
-#### Not on Quicklisp (yet)
-* `vk`: Get it [here](https://github.com/JolifantoBambla/vk).
-* `cl-glfw`: The `cl-glfw` on Quicklisp does not (yet?) support Vulkan. There is an open pull request though, so this might change. In the meantime you can use [my fork](https://github.com/JolifantoBambla/cl-glfw3).
+* `vk`
+* `cl-glfw`
 
 ### External dependencies
 * [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)

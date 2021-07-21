@@ -36,4 +36,6 @@
   (format t "~%~%Running create-debug-utils-messenger!~%")
   (create-debug-utils-messenger)
   (format t "~%~%Running create-debug-utils-messenger-next!~%")
-  (create-debug-utils-messenger-next))
+  (create-debug-utils-messenger-next)
+  (format t "~%~%Running compile-shaders-from-repl!~%")
+  (compile-shaders-from-repl))

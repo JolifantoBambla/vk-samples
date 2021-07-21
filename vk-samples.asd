@@ -11,7 +11,8 @@
                #:cffi
                #:cl-glfw3
                #:rtg-math
-               #:trivial-main-thread)
+               #:trivial-main-thread
+               #:shaderc)
   :components ((:file "package")
                (:module "samples"
                 :components ((:file "utils")
@@ -49,5 +50,7 @@
                              (:module "create-debug-utils-messenger"
                               :components ((:file "create-debug-utils-messenger")))
                              (:module "create-debug-utils-messenger-next"
-                              :components ((:file "create-debug-utils-messenger-next")))))
+                              :components ((:file "create-debug-utils-messenger-next")))
+                             (:module "compile-shaders-from-repl"
+                              :components ((:file "compile-shaders-from-repl")))))
                (:file "vk-samples")))

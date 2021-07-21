@@ -1,8 +1,17 @@
-;;;; 15-draw-cube.lisp
+;;;; compile-shaders-from-repl.lisp
 
-(in-package #:vk-samples/15-draw-cube)
+(in-package #:vk-samples/compile-shaders-from-repl)
 
-(defun 15-draw-cube (&optional (show-cube-seconds 1) (app-name "15-draw-cube") (window-width 500) (window-height 500))
+(defmacro with-repl-compiled-shader-module ((shader-module device code) &body body)
+  `(let ((,shader-module
+           (vk:create-shader-module ,device
+                                    (make-instance 'vk:shader-module-create-info
+                                                   :code ,code))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-shader-module ,device ,shader-module))))
+
+(defun compile-shaders-from-repl (&optional (show-cube-seconds 1) (app-name "compile-shaders-from-repl") (window-width 500) (window-height 500))
   ;; WITH-GFX is a bit convoluted, but it contains everything from the previous samples
   (with-gfx (instance
              device
@@ -30,12 +39,14 @@
       (with-simple-pipeline-layout (pipeline-layout
                                     device
                                     descriptor-set-layout)
-        (with-shader-module (vertex-shader-module
-                             device
-                             "vertex-shader.spv")
-          (with-shader-module (fragment-shader-module
-                               device
-                              "fragment-shader.spv")
+        (with-repl-compiled-shader-module (vertex-shader-module
+                                           device
+                                           (shaderc:compile-to-spv (make-simple-vertex-shader)
+                                                                   :vertex-shader))
+          (with-repl-compiled-shader-module (fragment-shader-module
+                                             device
+                                             (shaderc:compile-to-spv (make-simple-fragment-shader)
+                                                                     :fragment-shader))
              (with-simple-graphics-pipeline (graphics-pipeline
                                         device
                                         pipeline-layout

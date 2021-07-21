@@ -47,7 +47,9 @@
   (:use #:cl)
   (:export
    #:make-mvpc
-   #:make-colored-cube-data))
+   #:make-colored-cube-data
+   #:make-simple-vertex-shader
+   #:make-simple-fragment-shader))
 
 (defpackage #:vk-samples/01-init-instance
   (:documentation "Shows how to create and destroy a Vulkan instance.")
@@ -172,6 +174,14 @@
   (:export
    #:create-debug-utils-messenger-next))
 
+(defpackage #:vk-samples/compile-shaders-from-repl
+  (:documentation "The same as 15-draw-cube, but the shaders are compiled from the REPL via the SHADERC package.")
+   (:use #:cl
+         #:vk-samples/utils
+         #:vk-samples/data)
+  (:export
+   #:compile-shaders-from-repl))
+
 (defpackage #:vk-samples
   (:documentation "Usage samples for the Vulkan bindings provided by VK.")
   (:use #:cl)
@@ -209,6 +219,8 @@
                 #:create-debug-utils-messenger)
   (:import-from #:vk-samples/create-debug-utils-messenger-next
                 #:create-debug-utils-messenger-next)
+  (:import-from #:vk-samples/compile-shaders-from-repl
+                #:compile-shaders-from-repl)
   (:export
    #:01-init-instance
    #:02-enumerate-devices
@@ -227,4 +239,5 @@
    #:15-draw-cube
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
+   #:compile-shaders-from-repl
    #:run-all-samples))

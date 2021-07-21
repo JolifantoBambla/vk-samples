@@ -17,6 +17,9 @@ Some of the samples might also work on MacOS, but currently it is not guaranteed
 * `vk`
 * `cl-glfw`
 
+#### Not on Quicklisp (yet)
+* [shaderc](https://github.com/JolifantoBambla/shadercl)
+
 ### External dependencies
 * [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
 * [GLFW](https://www.glfw.org)
@@ -48,6 +51,8 @@ sample don't repeat too much from the earlier samples.
 | 15-draw-cube | This puts everything from the previous samples together and shows how to finally draw a cube onto a window. |
 | create-debug-utils-messenger | Shows how to create and destroy a debug callback. |
 | create-debug-utils-messenger-next | Shows how to use the `NEXT` slot of a `VK:INSTANCE-CREATE-INFO` to create and destroy a debug callback alongside a Vulkan instance. |
+| compile-shaders-from-repl | This is the same as 15-draw-cube, but it compiles the shaders at runtime using `shaderc`. |
+
 
 ## Acknowledgements
 The samples in this repository closely follows the [VulkanSamples by LunarG](https://github.com/LunarG/VulkanSamples) as well as the samples for [Vulkan-Hpp](https://github.com/KhronosGroup/Vulkan-Hpp).

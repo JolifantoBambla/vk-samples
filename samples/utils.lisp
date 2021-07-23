@@ -472,6 +472,15 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
           (progn ,@body)
        (vk:destroy-shader-module ,device ,shader-module))))
 
+(defmacro with-compiled-shader-module ((shader-module device code) &body body)
+  `(let ((,shader-module
+           (vk:create-shader-module ,device
+                                    (make-instance 'vk:shader-module-create-info
+                                                   :code ,code))))
+     (unwind-protect
+          (progn ,@body)
+       (vk:destroy-shader-module ,device ,shader-module))))
+
 (defmacro with-framebuffers ((framebuffers device render-pass swapchain-image-views depth-image-view swapchain-extent) &body body)
   (let ((swapchain-image-view (gensym "SWAP-CHAIN-IMAGE-VIEW"))
         (framebuffer (gensym "FRAME-BUFFER")))

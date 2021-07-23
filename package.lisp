@@ -20,6 +20,7 @@
    #:with-depth-buffer
    #:with-render-pass
    #:with-shader-module
+   #:with-compiled-shader-module
    #:with-frame-buffers
    #:with-command-pool
    #:with-command-buffer
@@ -182,6 +183,14 @@
   (:export
    #:compile-shaders-from-repl))
 
+(defpackage #:vk-samples/use-vari-shaders
+  (:documentation "The same as compile-shaders-from-repl, but the shaders are written in Vari and transpiled to GLSL by Varjo.")
+   (:use #:cl
+         #:vk-samples/utils
+         #:vk-samples/data)
+  (:export
+   #:use-vari-shaders))
+
 (defpackage #:vk-samples
   (:documentation "Usage samples for the Vulkan bindings provided by VK.")
   (:use #:cl)
@@ -221,6 +230,8 @@
                 #:create-debug-utils-messenger-next)
   (:import-from #:vk-samples/compile-shaders-from-repl
                 #:compile-shaders-from-repl)
+  (:import-from #:vk-samples/use-vari-shaders
+                #:use-vari-shaders)
   (:export
    #:01-init-instance
    #:02-enumerate-devices
@@ -240,4 +251,5 @@
    #:create-debug-utils-messenger
    #:create-debug-utils-messenger-next
    #:compile-shaders-from-repl
+   #:use-vari-shaders
    #:run-all-samples))

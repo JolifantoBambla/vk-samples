@@ -12,7 +12,8 @@
                #:cl-glfw3
                #:rtg-math
                #:trivial-main-thread
-               #:shaderc)
+               #:shaderc
+               #:varjo)
   :components ((:file "package")
                (:module "samples"
                 :components ((:file "utils")
@@ -52,5 +53,7 @@
                              (:module "create-debug-utils-messenger-next"
                               :components ((:file "create-debug-utils-messenger-next")))
                              (:module "compile-shaders-from-repl"
-                              :components ((:file "compile-shaders-from-repl")))))
+                              :components ((:file "compile-shaders-from-repl")))
+                             (:module "use-vari-shaders"
+                              :components ((:file "use-vari-shaders")))))
                (:file "vk-samples")))

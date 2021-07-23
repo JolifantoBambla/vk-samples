@@ -38,4 +38,6 @@
   (format t "~%~%Running create-debug-utils-messenger-next!~%")
   (create-debug-utils-messenger-next)
   (format t "~%~%Running compile-shaders-from-repl!~%")
-  (compile-shaders-from-repl))
+  (compile-shaders-from-repl)
+  (format t "~%~%Running use-vari-shaders!~%")
+  (use-vari-shaders))

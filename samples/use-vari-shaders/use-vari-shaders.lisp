@@ -9,8 +9,7 @@
   (varjo:make-stage :vertex '((pos :vec4)
                               (in-color :vec4))
                     '((uniform-buffer uniform-buffer :ubo :std-140 (:set 0) (:binding 0)))
-                    '(:400
-                      (:extensions "GL_ARB_separate_shader_objects" "GL_ARB_shading_language_420pack")
+                    '(:440
                       (:target-environment :vulkan))
                     '((with-slots (mvpc) uniform-buffer
                         (values
@@ -20,8 +19,7 @@
 (defparameter *fragment-stage*
   (varjo:make-stage :fragment '((color :vec4))
                     nil
-                    '(:400
-                      (:extensions "GL_ARB_separate_shader_objects" "GL_ARB_shading_language_420pack")
+                    '(:440
                       (:target-environment :vulkan))
                     '(color)))
 

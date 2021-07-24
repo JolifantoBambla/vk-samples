@@ -19,6 +19,7 @@ Some of the samples might also work on MacOS, but currently it is not guaranteed
 
 #### Not on Quicklisp (yet)
 * [shaderc](https://github.com/JolifantoBambla/shadercl)
+* [varjo](https://github.com/JolifantoBambla/varjo): this is my fork of Varjo, which adds Vulkan support and is not merged into the original repo (yet?). 
 
 ### External dependencies
 * [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)
@@ -52,6 +53,7 @@ sample don't repeat too much from the earlier samples.
 | create-debug-utils-messenger | Shows how to create and destroy a debug callback. |
 | create-debug-utils-messenger-next | Shows how to use the `NEXT` slot of a `VK:INSTANCE-CREATE-INFO` to create and destroy a debug callback alongside a Vulkan instance. |
 | compile-shaders-from-repl | This is the same as 15-draw-cube, but it compiles the shaders at runtime using `shaderc`. |
+| compile-shaders-from-repl | This is the same as compile-shaders-from-repl, but the shaders are written in [Vari](https://github.com/cbaggers/varjo). The shaders are slightly different, because the earliest GLSL version Varjo can produce shaders targeted at Vulkan (i.e. SPIR-V compilation) for. |
 
 
 ## Acknowledgements

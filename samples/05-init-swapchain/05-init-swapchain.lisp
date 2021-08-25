@@ -43,7 +43,7 @@
                                                        graphics-queue-family-index)))
                     ;; if our graphics queue family doesn't support presentation, we'll try to find a queue family which supports both
                     (unless present-queue-family-index
-                      (loop for q in queue-familiy-properties
+                      (loop for q in queue-family-properties
                             for i from 0
                             when (and (member :graphics (vk:queue-flags q))
                                       (vk:get-physical-device-surface-support-khr physical-device i surface))

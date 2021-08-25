@@ -4,6 +4,6 @@
 
 (defun 02-enumerate-devices (&optional (app-name "02-enumerate-devices"))
   ;; with-instance is located in utils - check 01-init-instance to see how to create and destroy an instance
-  (with-instance (instance :app-name app-name :window-extensions nil :log-levels nil)
+  (with-instance (instance :app-name app-name :window-extensions nil :create-debug-messengerp nil)
     (format t "Found ~a devices!~%"
             (length (vk:enumerate-physical-devices instance)))))

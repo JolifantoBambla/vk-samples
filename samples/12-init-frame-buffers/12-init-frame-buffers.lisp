@@ -23,7 +23,9 @@
                        physical-device
                        surface
                        graphics-index
-                       present-index)
+                       present-index
+                       window-width
+                       window-height)
         (let ((depth-format :d16-unorm))
           (with-depth-buffer (depth-image
                               depth-image-view

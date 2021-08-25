@@ -13,9 +13,11 @@
                    (vk:enumerate-instance-extension-properties))
           ()
           "Could not find the ~a extension." vk:+ext-debug-utils-extension-name+)
-  ;; when we extend the vk:instance-create-info with a vk:debug-utils-messenger-create-info-ext the debug utils messenger is created & destroyed
+  ;; when we extend the vk:instance-create-info with a vk:debug-utils-messenger-create-info-ext a debug utils messenger is created & destroyed
   ;; alongside the instance implicitly
-  ;; this way we also get debug information for the instance creation and destruction
+  ;; this way we get debug information for the instance creation and destruction
+  ;; note however, that in order to get debug information about other operations we still need to construct a persistent debug utils messenger
+  ;; see the sample "create-debug-utils-messenger" for how to do that
   (let ((instance (vk:create-instance (make-instance 'vk:instance-create-info
                                                      :next (make-instance 'vk:debug-utils-messenger-create-info-ext
                                                                           :message-type '(:validation)

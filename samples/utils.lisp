@@ -127,11 +127,34 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                                                              :depth clear-depth
                                                                              :stencil clear-stencil)))))
 
-(defmacro with-instance ((instance &key (app-name "sample-app") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation))) &body body)
+(defmacro with-debug-utils-messenger ((messenger instance create-info) &body body)
+  (let ((ext-loader (gensym "EXT-LOADER")))
+    `(let* ((,ext-loader (vk:make-extension-loader :instance ,instance))
+            (,messenger (vk:create-debug-utils-messenger-ext ,instance
+                                                             ,create-info
+                                                             vk:*default-allocator*
+                                                             ,ext-loader)))
+       (unwind-protect
+            (progn ,@body)
+         (vk:destroy-debug-utils-messenger-ext ,instance
+                                               ,messenger
+                                               vk:*default-allocator*
+                                               ,ext-loader)))))
+
+(defmacro with-instance ((instance
+                          &key
+                            (app-name "sample-app")
+                            (window-extensions t)
+                            (log-levels '(:warning :error))
+                            (message-types '(:validation))
+                            (create-debug-messengerp t))
+                         &body body)
   (let ((extension-names (gensym "EXT-NAMES"))
         (layer-names (gensym "LAYER-NAMES"))
         (message-type (gensym "MESSAGE-TYPE"))
-        (message-severity (gensym "MESSAGE-SEVERITY")))
+        (message-severity (gensym "MESSAGE-SEVERITY"))
+        (messenger-create-info (gensym "MESSENGER-CREATE-INFO"))
+        (messenger (gensym "MESSENGER")))
     `(let ((,layer-names nil)
            (,extension-names nil)
            (,message-severity '(,@log-levels))
@@ -143,16 +166,20 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
        (when (and ,message-type
                   (member :validation ,message-type))
          (push *vk-validation-layer-name* ,layer-names))
-       (let ((,instance (vk:create-instance (make-instance 'vk:instance-create-info
-                                                           :next (when ,message-severity
-                                                                   (make-default-debug-utils-messenger-create-info
-                                                                    :log-levels ,message-severity
-                                                                    :message-types ,message-type))
-                                                           :application-info (make-default-application-info ,app-name)
-                                                           :enabled-layer-names ,layer-names
-                                                           :enabled-extension-names ,extension-names))))
+       (let* ((,messenger-create-info (when ,create-debug-messengerp
+                                        (make-default-debug-utils-messenger-create-info
+                                         :log-levels ,message-severity
+                                         :message-types ,message-type)))
+              (,instance (vk:create-instance (make-instance 'vk:instance-create-info
+                                                               :next ,messenger-create-info
+                                                               :application-info (make-default-application-info ,app-name)
+                                                               :enabled-layer-names ,layer-names
+                                                               :enabled-extension-names ,extension-names))))
          (unwind-protect
-              (progn ,@body)
+              ,(if create-debug-messengerp
+                   `(with-debug-utils-messenger (,messenger ,instance ,messenger-create-info)
+                      (progn ,@body))
+                   `(progn ,@body))
            (vk:destroy-instance ,instance))))))
 
 (defun find-graphics-queue-family-index (physical-device)
@@ -162,11 +189,12 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
    (vk:get-physical-device-queue-family-properties physical-device)))
 
 (defun find-graphics-and-present-queue-family-indices (physical-device surface)
-  (let* ((graphics-queue-family-index (find-graphics-queue-family-index physical-device))
+  (let* ((queue-family-properties (vk:get-physical-device-queue-family-properties physical-device))
+         (graphics-queue-family-index (find-graphics-queue-family-index physical-device))
          (present-queue-family-index (when (vk:get-physical-device-surface-support-khr physical-device graphics-queue-family-index surface)
                                        graphics-queue-family-index)))
     (unless present-queue-family-index
-      (loop for q in queue-familiy-properties
+      (loop for q in queue-family-properties
             for i from 0
             when (and (member :graphics (vk:queue-flags q))
                       (vk:get-physical-device-surface-support-khr physical-device i surface))
@@ -265,7 +293,7 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                 :enable-swapchain-p ,enable-swapchain-p)
        (progn ,@body))))
 
-(defun determine-swapchain-extent (physical-device surface)
+(defun determine-swapchain-extent (physical-device surface window-width window-height)
   (let ((surface-capabilities (vk:get-physical-device-surface-capabilities-khr physical-device surface)))
     (if (= (vk:width (vk:current-extent surface-capabilities)) #xFFFFFFFF)
         (make-instance 'vk:extent-2d
@@ -313,12 +341,17 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                            physical-device
                            surface
                            graphics-index
-                           present-index)
+                           present-index
+                           window-width
+                           window-height)
                           &body body)
   (let ((surface-capabilities (gensym)))
     `(let* ((,swapchain-image-format (vk:format (pick-color-format ,physical-device ,surface)))
             (,surface-capabilities (vk:get-physical-device-surface-capabilities-khr ,physical-device ,surface))
-            (,swapchain-extent (determine-swapchain-extent ,physical-device ,surface))
+            (,swapchain-extent (determine-swapchain-extent ,physical-device
+                                                           ,surface
+                                                           ,window-width
+                                                           ,window-height))
             (,swapchain
               (vk:create-swapchain-khr
                ,device
@@ -585,7 +618,9 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                         ,physical-device
                         ,surface
                         ,graphics-index
-                        ,present-index)
+                        ,present-index
+                        ,window-width
+                        ,window-height)
          (with-depth-buffer (,depth-image
                              ,depth-image-view
                              ,device

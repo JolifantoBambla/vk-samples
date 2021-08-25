@@ -4,7 +4,7 @@
 
 (defun 03-init-device (&optional (app-name "03-init-device"))
   ;; with-instance is located in utils - check 01-init-instance to see how to create and destroy an instance
-  (with-instance (instance :app-name app-name :window-extensions nil :log-levels nil)
+  (with-instance (instance :app-name app-name :window-extensions nil :create-debug-messengerp nil)
     ;; get a physical device - we just take the first one here, but you might want to choose one based on the features it supports or whatever
     (let* ((physical-device (first (vk:enumerate-physical-devices instance)))
            ;; query the queue family properties of the chosen physical device

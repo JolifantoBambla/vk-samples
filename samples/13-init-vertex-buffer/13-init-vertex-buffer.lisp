@@ -29,21 +29,21 @@
                           command-pool)
       (let* ((colored-cube-data (make-colored-cube-data))
              (vertex-buffer (vk:create-buffer device
-                                              (make-instance 'vk:buffer-create-info
-                                                             :size (* (cffi:foreign-type-size :float)
-                                                                      (length colored-cube-data))
-                                                             :usage :vertex-buffer
-                                                             :sharing-mode :exclusive))))
+                                              (vk:make-buffer-create-info
+                                               :size (* (cffi:foreign-type-size :float)
+                                                        (length colored-cube-data))
+                                               :usage :vertex-buffer
+                                               :sharing-mode :exclusive))))
         (unwind-protect
              ;; the process of allocating memory and copying the data to the device is basically
              ;; the same as in 07-INIT-UNIFORM-BUFFER
              (let ((memory-requirements (vk:get-buffer-memory-requirements device vertex-buffer)))
                (with-allocated-memory (memory
                                        device
-                                       (make-instance 'vk:memory-allocate-info
-                                                      :allocation-size (vk:size memory-requirements)
-                                                      :memory-type-index (find-type-index physical-device
-                                                                                          memory-requirements)))
+                                       (vk:make-memory-allocate-info
+                                        :allocation-size (vk:size memory-requirements)
+                                        :memory-type-index (find-type-index physical-device
+                                                                            memory-requirements)))
                  (copy-to-device device
                                  memory
                                  colored-cube-data
@@ -54,7 +54,7 @@
                                         memory
                                         0)
                  (let ((image-acquired-semaphore (vk:create-semaphore device
-                                                                     (make-instance 'vk:semaphore-create-info))))
+                                                                      (vk:make-semaphore-create-info))))
                    (unwind-protect
                         (multiple-value-bind (next-image-index result)
                             (vk:acquire-next-image-khr device
@@ -64,48 +64,48 @@
                           (assert (and (< next-image-index (length framebuffers))
                                        (eq result :success))
                                   () "Acquired next image index: ~a VkResult: ~a" next-image-index result)
-                          (let* ((clear-color-value (make-instance 'vk:clear-color-value
-                                                                   :float-32 (make-array 4
-                                                                                         :initial-contents '(0.2 0.2 0.2 0.2))))
-                                 (clear-depth-stencil (make-instance 'vk:clear-depth-stencil-value
-                                                                     :depth 1.0
-                                                                     :stencil 0))
+                          (let* ((clear-color-value (vk:make-clear-color-value
+                                                     :float-32 (make-array 4
+                                                                           :initial-contents '(0.2 0.2 0.2 0.2))))
+                                 (clear-depth-stencil (vk:make-clear-depth-stencil-value
+                                                       :depth 1.0
+                                                       :stencil 0))
                                  (clear-values (list
-                                                (make-instance 'vk:clear-value
-                                                               :color clear-color-value)
-                                                (make-instance 'vk:clear-value
-                                                               :depth-stencil clear-depth-stencil)))
-                                 (render-pass-begin-info (make-instance 'vk:render-pass-begin-info
-                                                                        :render-pass render-pass
-                                                                        :framebuffer (nth next-image-index framebuffers)
-                                                                        :render-area (make-instance 'vk:rect-2d
-                                                                                                    :offset (make-instance 'vk:offset-2d
-                                                                                                                           :x 0
-                                                                                                                           :y 0)
-                                                                                                    :extent swapchain-extent)
-                                                                        :clear-values clear-values)))
+                                                (vk:make-clear-value
+                                                 :color clear-color-value)
+                                                (vk:make-clear-value
+                                                 :depth-stencil clear-depth-stencil)))
+                                 (render-pass-begin-info (vk:make-render-pass-begin-info
+                                                          :render-pass render-pass
+                                                          :framebuffer (nth next-image-index framebuffers)
+                                                          :render-area (vk:make-rect-2d
+                                                                        :offset (vk:make-offset-2d
+                                                                                 :x 0
+                                                                                 :y 0)
+                                                                        :extent swapchain-extent)
+                                                          :clear-values clear-values)))
                             ;; now we can record some commands in our command buffer!
                             (vk:begin-command-buffer command-buffer
-                                                     (make-instance 'vk:command-buffer-begin-info))
+                                                     (vk:make-command-buffer-begin-info))
                             (vk:cmd-begin-render-pass command-buffer
                                                       render-pass-begin-info
                                                       :inline)
                             (vk:cmd-bind-vertex-buffers command-buffer
-                                                        0      ;; first binding
+                                                        0 ;; first binding
                                                         (list vertex-buffer)
-                                                        '(0))  ;; offsets
+                                                        '(0)) ;; offsets
                             (vk:cmd-end-render-pass command-buffer)
                             (vk:end-command-buffer command-buffer)
 
                             ;; finally, we submit the command buffer and wait for the queue to finish processing it
                             (let ((fence (vk:create-fence device
-                                                          (make-instance 'vk:fence-create-info))))
+                                                          (vk:make-fence-create-info))))
                               (unwind-protect
                                    (progn
                                      (vk:queue-submit graphics-queue
                                                       (list
-                                                       (make-instance 'vk:submit-info
-                                                                      :command-buffers (list command-buffer)))
+                                                       (vk:make-submit-info
+                                                        :command-buffers (list command-buffer)))
                                                       fence)
                                      (loop while (eq :timeout
                                                      (vk:wait-for-fences device

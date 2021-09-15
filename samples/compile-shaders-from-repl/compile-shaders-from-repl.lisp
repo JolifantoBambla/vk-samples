@@ -5,7 +5,7 @@
 (defmacro with-repl-compiled-shader-module ((shader-module device code) &body body)
   `(let ((,shader-module
            (vk:create-shader-module ,device
-                                    (make-instance 'vk:shader-module-create-info
+                                    (vk:make-shader-module-create-info
                                                    :code ,code))))
      (unwind-protect
           (progn ,@body)
@@ -110,21 +110,20 @@
                                                       (vk:cmd-set-viewport command-buffer
                                                                            0
                                                                            (list
-                                                                            (make-instance 'vk:viewport
-                                                                                           :x 0.0
-                                                                                           :y 0.0
-                                                                                           :width (float (vk:width swapchain-extent))
-                                                                                           :height (float (vk:height swapchain-extent))
-                                                                                           :min-depth 0.0
-                                                                                           :max-depth 1.0)))
+                                                                            (vk:make-viewport
+                                                                             :x 0.0
+                                                                             :y 0.0
+                                                                             :width (float (vk:width swapchain-extent))
+                                                                             :height (float (vk:height swapchain-extent))
+                                                                             :min-depth 0.0
+                                                                             :max-depth 1.0)))
                                                       (vk:cmd-set-scissor command-buffer
                                                                           0
                                                                           (list
-                                                                           (make-instance 'vk:rect-2d
-                                                                                          :offset (make-instance 'vk:offset-2d
-                                                                                                                 :x 0
-                                                                                                                 :y 0)
-                                                                                          :extent swapchain-extent)))
+                                                                           (vk:make-rect-2d
+                                                                            :offset (vk:make-offset-2d :x 0
+                                                                                                       :y 0)
+                                                                            :extent swapchain-extent)))
                                                       (vk:cmd-draw command-buffer
                                                                    (* 12 3) ;; we have 6 faces, 2 triangles per face and 3 vertices per triangle
                                                                    1 ;; we want to render one instance
@@ -136,10 +135,10 @@
                                             device)
                                  (vk:queue-submit graphics-queue
                                                   (list
-                                                   (make-instance 'vk:submit-info
-                                                                  :wait-semaphores (list image-acquired-semaphore)
-                                                                  :wait-dst-stage-mask '(:color-attachment-output)
-                                                                  :command-buffers (list command-buffer)))
+                                                   (vk:make-submit-info
+                                                    :wait-semaphores (list image-acquired-semaphore)
+                                                    :wait-dst-stage-mask '(:color-attachment-output)
+                                                    :command-buffers (list command-buffer)))
                                                   fence)
                                  (loop while (eq :timeout (vk:wait-for-fences device (list fence) t *fence-timeout*)))
                                  ;; as soon as the graphics queue has finished rendering our cube, we can tell the
@@ -151,9 +150,9 @@
                                                                                 present-index
                                                                                 0)))
                                         (present-result (vk:queue-present-khr present-queue
-                                                                              (make-instance 'vk:present-info-khr
-                                                                                             :swapchains (list swapchain)
-                                                                                             :image-indices (list next-image-index)))))
+                                                                              (vk:make-present-info-khr
+                                                                               :swapchains (list swapchain)
+                                                                               :image-indices (list next-image-index)))))
                                    (unless (eq :success present-result)
                                      (if (eq :suboptimal-khr present-result)
                                          (format t "vk:queue-present-khr returned ~a~%" present-result)

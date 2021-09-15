@@ -13,11 +13,11 @@
                                 (make-pathname :directory '(:relative "samples" "11-init-shaders"))))))
                (vk-utils:read-shader-source file-path))))
       (let* ((vertex-shader-module-create-info
-               (make-instance 'vk:shader-module-create-info
-                              :code (read-shader-file "vertex-shader.spv")))
+               (vk:make-shader-module-create-info
+                :code (read-shader-file "vertex-shader.spv")))
              (fragment-shader-module-create-info
-               (make-instance 'vk:shader-module-create-info
-                              :code (read-shader-file "fragment-shader.spv")))
+               (vk:make-shader-module-create-info
+                :code (read-shader-file "fragment-shader.spv")))
              (vertex-shader-module (vk:create-shader-module device
                                                             vertex-shader-module-create-info)))
         (unwind-protect

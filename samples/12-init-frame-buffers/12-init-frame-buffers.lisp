@@ -38,14 +38,14 @@
                                color-format
                                depth-format)
               (let ((framebuffers (loop for swapchain-image-view in swapchain-image-views
-                                        for framebuffer-create-info = (make-instance 'vk:framebuffer-create-info
-                                                                                     :render-pass render-pass
-                                                                                     :attachments (list
-                                                                                                   swapchain-image-view
-                                                                                                   depth-image-view)
-                                                                                     :width (vk:width swapchain-extent)
-                                                                                     :height (vk:height swapchain-extent)
-                                                                                     :layers 1)
+                                        for framebuffer-create-info = (vk:make-framebuffer-create-info
+                                                                       :render-pass render-pass
+                                                                       :attachments (list
+                                                                                     swapchain-image-view
+                                                                                     depth-image-view)
+                                                                       :width (vk:width swapchain-extent)
+                                                                       :height (vk:height swapchain-extent)
+                                                                       :layers 1)
                                         collect (vk:create-framebuffer device framebuffer-create-info))))
                 (unwind-protect
                      (format t "Created ~a framebuffer(s)!" (length framebuffers))

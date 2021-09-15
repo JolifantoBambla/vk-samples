@@ -18,14 +18,14 @@
   ;; this way we get debug information for the instance creation and destruction
   ;; note however, that in order to get debug information about other operations we still need to construct a persistent debug utils messenger
   ;; see the sample "create-debug-utils-messenger" for how to do that
-  (let ((instance (vk:create-instance (make-instance 'vk:instance-create-info
-                                                     :next (make-instance 'vk:debug-utils-messenger-create-info-ext
-                                                                          :message-type '(:validation)
-                                                                          :message-severity '(:info :warning :error)
-                                                                          :pfn-user-callback (cffi:get-callback 'default-debug-utils-log-callback)
-                                                                          :user-data (cffi:null-pointer))
-                                                     :application-info (make-default-application-info app-name)
-                                                     ;; we enable the validation layer to get validation messages
-                                                     :enabled-layer-names (list *vk-validation-layer-name*)
-                                                     :enabled-extension-names (list vk:+ext-debug-utils-extension-name+)))))
+  (let ((instance (vk:create-instance (vk:make-instance-create-info
+                                       :next (vk:make-debug-utils-messenger-create-info-ext
+                                              :message-type '(:validation)
+                                              :message-severity '(:info :warning :error)
+                                              :pfn-user-callback (cffi:get-callback 'default-debug-utils-log-callback)
+                                              :user-data (cffi:null-pointer))
+                                       :application-info (make-default-application-info app-name)
+                                       ;; we enable the validation layer to get validation messages
+                                       :enabled-layer-names (list *vk-validation-layer-name*)
+                                       :enabled-extension-names (list vk:+ext-debug-utils-extension-name+)))))
     (vk:destroy-instance instance)))

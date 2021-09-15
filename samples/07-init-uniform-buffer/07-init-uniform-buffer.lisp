@@ -10,10 +10,10 @@
                              (v3:make -5.0  3.0 -10.0) ;; from / eye / camera
                              (v3:make  0.0  0.0   0.0))) ;; to / center of projection
            (projection (rtg-math.projection:perspective-radian-fov
-                        64.0   ;; width (usually the window width)
-                        64.0   ;; height (usually the window height)
-                        0.1    ;; near
-                        100.0  ;; far
+                        64.0  ;; width (usually the window width)
+                        64.0  ;; height (usually the window height)
+                        0.1   ;; near
+                        100.0 ;; far
                         (rtg-math:radians 45.0))) ;; field of view
            ;; if you're coming from OpenGL this might be new for you: Vulkan's clip space has an inverted y axis and
            ;; the z range is [0,1] instead of [-1,1]
@@ -25,10 +25,10 @@
            (mvpc (m4:* clip projection view model))
            (size-of-mvpc (* (cffi:foreign-type-size :float) (length mvpc)))
            (uniform-data-buffer (vk:create-buffer device
-                                                  (make-instance 'vk:buffer-create-info
-                                                                 :usage :uniform-buffer
-                                                                 :sharing-mode :exclusive
-                                                                 :size size-of-mvpc))))
+                                                  (vk:make-buffer-create-info
+                                                   :usage :uniform-buffer
+                                                   :sharing-mode :exclusive
+                                                   :size size-of-mvpc))))
       (unwind-protect
            ;; First we need to find out how we need to allocated the memory on our device
            ;; You might want to read up on all that's going on here, I'll just scratch the surface:
@@ -47,15 +47,15 @@
                                     if (and (logand type-bits 1)
                                             (= (logand property-flags requirements-mask)
                                                requirements-mask))
-                                      return i
+                                    return i
                                     else
                                     do (setf type-bits (ash type-bits -1))))
                   ;; with all the information we gathered about the device memory, we can now allocate the memory where
                   ;; we can write our data to
                   (uniform-data-memory (vk:allocate-memory device
-                                                           (make-instance 'vk:memory-allocate-info
-                                                                          :allocation-size (vk:size memory-requirements)
-                                                                          :memory-type-index type-index))))
+                                                           (vk:make-memory-allocate-info
+                                                            :allocation-size (vk:size memory-requirements)
+                                                            :memory-type-index type-index))))
              (unwind-protect
                   (progn
                     (format t "This is the data that will be written to the device:~%~a~%"

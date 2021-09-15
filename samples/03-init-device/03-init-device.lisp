@@ -15,11 +15,11 @@
                                                      queue-family-properties))
            ;; setup the device create info
            (queue-priority 0.0)
-           (device-queue-create-info (make-instance 'vk:device-queue-create-info
-                                                    :queue-family-index graphics-queue-family-index
-                                                    :queue-priorities (list queue-priority)))
-           (device-create-info (make-instance 'vk:device-create-info
-                                              :queue-create-infos (list device-queue-create-info)))
+           (device-queue-create-info (vk:make-device-queue-create-info
+                                      :queue-family-index graphics-queue-family-index
+                                      :queue-priorities (list queue-priority)))
+           (device-create-info (vk:make-device-create-info
+                                :queue-create-infos (list device-queue-create-info)))
            ;; create the device
            (device (vk:create-device physical-device device-create-info)))
       ;; destroy the device

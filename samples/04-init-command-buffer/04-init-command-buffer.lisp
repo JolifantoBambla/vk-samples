@@ -5,15 +5,15 @@
 (defun 04-init-command-buffer (&optional (app-name "04-init-command-buffer"))
   ;; with-instance-and-device is located in utils - check 03-init-device to see how to create and destroy a device
   (with-instance-and-device (instance device physical-device :app-name app-name :window-extensions nil)
-    (let* ((create-info (make-instance 'vk:command-pool-create-info
-                                       ;; the device has created a queue from the same queue family (check out 03-init-device) 
-                                       :queue-family-index (find-graphics-queue-family-index physical-device)))
+    (let* ((create-info (vk:make-command-pool-create-info
+                         ;; the device has created a queue from the same queue family (check out 03-init-device) 
+                         :queue-family-index (find-graphics-queue-family-index physical-device)))
            (command-pool (vk:create-command-pool device create-info)))
       (unwind-protect
-           (let* ((allocate-info (make-instance 'vk:command-buffer-allocate-info
-                                                :command-pool command-pool
-                                                :level :primary
-                                                :command-buffer-count 1))
+           (let* ((allocate-info (vk:make-command-buffer-allocate-info
+                                  :command-pool command-pool
+                                  :level :primary
+                                  :command-buffer-count 1))
                   ;; allocate the command buffer
                   (command-buffer (first (vk:allocate-command-buffers device allocate-info))))
              ;; free the command buffer - this is optional, since destroying the command pool will free it implicitly

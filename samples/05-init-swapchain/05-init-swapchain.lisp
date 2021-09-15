@@ -17,13 +17,13 @@
            ;; we also enable the debug utils extension to get debug output - this is completely optional
            ;; check out the samples create-debug-utils-messenger(-next) to see how this works
            (extension-names (push vk:+ext-debug-utils-extension-name+ required-extensions))
-           (instance (vk:create-instance (make-instance 'vk:instance-create-info
-                                                       ;; we create a debug-utils-messenger together with the instance (optional)
-                                                       :next (make-default-debug-utils-messenger-create-info)
-                                                       :application-info (make-default-application-info app-name)
-                                                       ;; we enable the validation layer to get validation messages (optional)
-                                                       :enabled-layer-names (list *vk-validation-layer-name*)
-                                                       :enabled-extension-names extension-names))))
+           (instance (vk:create-instance (vk:make-instance-create-info
+                                          ;; we create a debug-utils-messenger together with the instance (optional)
+                                          :next (make-default-debug-utils-messenger-create-info)
+                                          :application-info (make-default-application-info app-name)
+                                          ;; we enable the validation layer to get validation messages (optional)
+                                          :enabled-layer-names (list *vk-validation-layer-name*)
+                                          :enabled-extension-names extension-names))))
       (unwind-protect
            ;; first we'll create a surface - the Vulkan API does not provide a function for this though
            ;; so we have to create this via glfw
@@ -77,10 +77,10 @@
                                                      :queue-family-index present-queue-family-index
                                                      :queue-priorities '(0.0)))))
                            (device (vk:create-device physical-device
-                                                     (make-instance 'vk:device-create-info
-                                                                    :queue-create-infos queue-create-infos
-                                                                    ;; we need to enable the swapchain extension on the device!
-                                                                    :enabled-extension-names (list vk:+khr-swapchain-extension-name+)))))
+                                                     (vk:make-device-create-info
+                                                      :queue-create-infos queue-create-infos
+                                                      ;; we need to enable the swapchain extension on the device!
+                                                      :enabled-extension-names (list vk:+khr-swapchain-extension-name+)))))
                       (unwind-protect
                            (let* ((formats (vk:get-physical-device-surface-formats-khr physical-device surface))
                                   ;; we'll just take the first format or B8G8R8A8
@@ -92,69 +92,69 @@
                                   ;; #xFFFFFFFF is a special value, meaning that the surface size is undefined
                                   ;; in that case we'll use the width and height that we want (clamped to the possible range)
                                   (swapchain-extent (if (= (vk:width (vk:current-extent surface-capabilities)) #xFFFFFFFF)
-                                                        (make-instance 'vk:extent-2d
-                                                                       :width (alexandria:clamp window-width
-                                                                                                (vk:width (vk:min-image-extent surface-capabilities))
-                                                                                                (vk:width (vk:max-image-extent surface-capabilities)))
-                                                                       :height (alexandria:clamp window-height
-                                                                                                 (vk:height (vk:min-image-extent surface-capabilities))
-                                                                                                 (vk:height (vk:max-image-extent surface-capabilities))))
+                                                        (vk:make-extent-2d
+                                                         :width (alexandria:clamp window-width
+                                                                                  (vk:width (vk:min-image-extent surface-capabilities))
+                                                                                  (vk:width (vk:max-image-extent surface-capabilities)))
+                                                         :height (alexandria:clamp window-height
+                                                                                   (vk:height (vk:min-image-extent surface-capabilities))
+                                                                                   (vk:height (vk:max-image-extent surface-capabilities))))
                                                         (vk:current-extent surface-capabilities)))
-                                  (swapchain-create-info (make-instance 'vk:swapchain-create-info-khr
-                                                                        :surface surface
-                                                                        ;; at least min-image-count swapchain images will be created
-                                                                        ;; we just set it to the minimum number that is supported by our surface
-                                                                        :min-image-count (vk:min-image-count surface-capabilities)
-                                                                        :image-format image-format
-                                                                        :image-color-space :srgb-nonlinear-khr
-                                                                        :image-extent swapchain-extent
-                                                                        :image-array-layers 1
-                                                                        :image-usage :color-attachment
-                                                                        ;; if we use two separate queues we'll need to share the images between them
-                                                                        :image-sharing-mode (if (= graphics-queue-family-index present-queue-family-index)
-                                                                                                :exclusive
-                                                                                                :concurrent)
-                                                                        :queue-family-indices (if (= graphics-queue-family-index present-queue-family-index)
-                                                                                                  (list graphics-queue-family-index)
-                                                                                                  (list graphics-queue-family-index
-                                                                                                        present-queue-family-index))
-                                                                        :pre-transform (if (member :identity (vk:supported-transforms surface-capabilities))
-                                                                                           :identity
-                                                                                           (vk:current-transform surface-capabilities))
-                                                                        :composite-alpha (cond
-                                                                                           ((member :pre-multiplied (vk:supported-composite-alpha surface-capabilities))
-                                                                                            :pre-multiplied)
-                                                                                           ((member :post-multiplied (vk:supported-composite-alpha surface-capabilities))
-                                                                                            :post-multiplied)
-                                                                                           ((member :inherit (vk:supported-composite-alpha surface-capabilities))
-                                                                                            :inherit)
-                                                                                           (t :opaque))
-                                                                        ;; FIFO is always guaranteed by the spec to be supported
-                                                                        :present-mode :fifo-khr
-                                                                        :clipped t))
+                                  (swapchain-create-info (vk:make-swapchain-create-info-khr
+                                                          :surface surface
+                                                          ;; at least min-image-count swapchain images will be created
+                                                          ;; we just set it to the minimum number that is supported by our surface
+                                                          :min-image-count (vk:min-image-count surface-capabilities)
+                                                          :image-format image-format
+                                                          :image-color-space :srgb-nonlinear-khr
+                                                          :image-extent swapchain-extent
+                                                          :image-array-layers 1
+                                                          :image-usage :color-attachment
+                                                          ;; if we use two separate queues we'll need to share the images between them
+                                                          :image-sharing-mode (if (= graphics-queue-family-index present-queue-family-index)
+                                                                                  :exclusive
+                                                                                  :concurrent)
+                                                          :queue-family-indices (if (= graphics-queue-family-index present-queue-family-index)
+                                                                                    (list graphics-queue-family-index)
+                                                                                    (list graphics-queue-family-index
+                                                                                          present-queue-family-index))
+                                                          :pre-transform (if (member :identity (vk:supported-transforms surface-capabilities))
+                                                                             :identity
+                                                                             (vk:current-transform surface-capabilities))
+                                                          :composite-alpha (cond
+                                                                             ((member :pre-multiplied (vk:supported-composite-alpha surface-capabilities))
+                                                                              :pre-multiplied)
+                                                                             ((member :post-multiplied (vk:supported-composite-alpha surface-capabilities))
+                                                                              :post-multiplied)
+                                                                             ((member :inherit (vk:supported-composite-alpha surface-capabilities))
+                                                                              :inherit)
+                                                                             (t :opaque))
+                                                          ;; FIFO is always guaranteed by the spec to be supported
+                                                          :present-mode :fifo-khr
+                                                          :clipped t))
                                   (swapchain (vk:create-swapchain-khr device swapchain-create-info)))
                              (unwind-protect
                                   ;; swapchain images are created during swapchain creation
                                   (let* ((swapchain-images (vk:get-swapchain-images-khr device swapchain))
-                                         (component-mapping (make-instance 'vk:component-mapping
-                                                                           :r :r
-                                                                           :b :b
-                                                                           :g :b
-                                                                           :a :a))
-                                         (subresource-range (make-instance 'vk:image-subresource-range
-                                                                           :aspect-mask :color
-                                                                           :base-mip-level 0
-                                                                           :level-count 1
-                                                                           :base-array-layer 0
-                                                                           :layer-count 1))
+                                         (component-mapping (vk:make-component-mapping
+                                                             :r :r
+                                                             :b :b
+                                                             :g :b
+                                                             :a :a))
+                                         (subresource-range (vk:make-image-subresource-range
+                                                             :aspect-mask :color
+                                                             :base-mip-level 0
+                                                             :level-count 1
+                                                             :base-array-layer 0
+                                                             :layer-count 1))
                                          (image-views (loop for image in swapchain-images
                                                             collect (vk:create-image-view device
-                                                                                          (make-instance 'vk:image-view-create-info
-                                                                                                         :image image
-                                                                                                         :view-type :2d
-                                                                                                         :format image-format
-                                                                                                         :components component-mapping
-                                                                                                         :subresource-range subresource-range)))))
+                                                                                          (vk:make-image-view-create-info
+                                                                                           :image image
+                                                                                           :view-type :2d
+                                                                                           :format image-format
+                                                                                           :components component-mapping
+                                                                                           :subresource-range subresource-range)))))
                                     (format t "Created ~a image view(s) ready to use on the created swapchain!"
                                             (length image-views))
                                     ;; destroy the image views again

@@ -14,12 +14,14 @@ Some of the samples might also work on MacOS, but currently it is not guaranteed
 * `cffi`
 * `rtg-math`
 * `trivial-main-thread` (TODO: actually use this - [MacOS support](https://github.com/JolifantoBambla/vk-samples/issues/27))
-* `vk`
 * `cl-glfw`
 
 #### Not on Quicklisp (yet)
+All of the following dependencies can be loaded via Quicklisp when they are cloned to one of your `ql:*local-project-directories*`.
+
+* [vk](https://github.com/JolifantoBambla/vk): The current version of `vk-samples` uses features that will be on Quicklisp in the next update (current version is `quicklisp-2021-08-07`).
 * [shaderc](https://github.com/JolifantoBambla/shadercl)
-* [varjo](https://github.com/JolifantoBambla/varjo): this is my fork of Varjo, which adds Vulkan support and is not merged into the original repo (yet?). 
+* [varjo](https://github.com/JolifantoBambla/varjo): this is my fork of Varjo, which adds Vulkan support and is not merged into the original repo (yet?).
 
 ### External dependencies
 * [Vulkan SDK](https://vulkan.lunarg.com/sdk/home)

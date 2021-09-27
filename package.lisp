@@ -191,6 +191,14 @@
   (:export
    #:use-vari-shaders))
 
+(defpackage #:vk-samples/ray-tracing
+  (:documentation "Shows how to construct a ray tracing pipeline using the VK_KHR_ray_tracing extension.")
+   (:use #:cl
+         #:vk-samples/utils
+         #:vk-samples/data)
+  (:export
+   #:ray-tracing))
+
 (defpackage #:vk-samples
   (:documentation "Usage samples for the Vulkan bindings provided by VK.")
   (:use #:cl)
@@ -232,6 +240,8 @@
                 #:compile-shaders-from-repl)
   (:import-from #:vk-samples/use-vari-shaders
                 #:use-vari-shaders)
+  (:import-from #:vk-samples/ray-tracing
+                #:ray-tracing)
   (:export
    #:01-init-instance
    #:02-enumerate-devices
@@ -252,4 +262,5 @@
    #:create-debug-utils-messenger-next
    #:compile-shaders-from-repl
    #:use-vari-shaders
+   #:ray-tracing
    #:run-all-samples))

@@ -12,6 +12,7 @@
    #:make-default-application-info
    #:make-default-debug-utils-messenger-create-info
    #:make-default-render-pass-begin-info
+   #:make-default-queue-create-infos
    #:with-instance
    #:with-device
    #:with-instance-and-device

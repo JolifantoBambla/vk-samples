@@ -204,36 +204,37 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
     (values graphics-queue-family-index
             present-queue-family-index)))
 
+(defun make-default-queue-create-infos (physical-device &optional (surface nil))
+  (if surface
+      (multiple-value-bind (gfx present)
+          (find-graphics-and-present-queue-family-indices physical-device surface)
+        (if (= gfx present)
+            (list
+             (vk:make-device-queue-create-info
+              :queue-family-index gfx
+              :queue-priorities '(0.0)))
+            (list
+             (vk:make-device-queue-create-info
+              :queue-family-index gfx
+              :queue-priorities '(0.0))
+             (vk:make-device-queue-create-info
+              :queue-family-index present
+              :queue-priorities '(0.0)))))
+      (list
+       (vk:make-device-queue-create-info
+        :queue-family-index (find-graphics-queue-family-index physical-device)
+        :queue-priorities '(0.0)))))
+
 (defmacro with-device ((device instance &optional (physical-device (gensym "PHYSICAL-DEVICE")) (surface nil) (enable-swapchain-p nil)) &body body)
-  (let ((gfx (gensym "GRAPHICS-FAMILY"))
-        (present (gensym "PRESENT-FAMILY")))
-    `(let ((,physical-device (first (vk:enumerate-physical-devices ,instance))))
-       (vk-utils:with-device (,device
-                              ,physical-device
-                              (vk:make-device-create-info
-                               :queue-create-infos ,(if surface
-                                                        `(multiple-value-bind (,gfx ,present)
-                                                             (find-graphics-and-present-queue-family-indices ,physical-device ,surface)
-                                                           (if (= ,gfx ,present)
-                                                               (list
-                                                                (vk:make-device-queue-create-info
-                                                                 :queue-family-index ,gfx
-                                                                 :queue-priorities '(0.0)))
-                                                               (list
-                                                                (vk:make-device-queue-create-info
-                                                                 :queue-family-index ,gfx
-                                                                 :queue-priorities '(0.0))
-                                                                (vk:make-device-queue-create-info
-                                                                 :queue-family-index ,present
-                                                                 :queue-priorities '(0.0)))))
-                                                        `(list
-                                                          (vk:make-device-queue-create-info
-                                                           :queue-family-index (find-graphics-queue-family-index ,physical-device)
-                                                           :queue-priorities '(0.0))))
-                               :enabled-extension-names ,(if enable-swapchain-p
-                                                             `(list vk:+khr-swapchain-extension-name+)
-                                                             `nil)))
-         (progn ,@body)))))
+  `(let ((,physical-device (first (vk:enumerate-physical-devices ,instance))))
+     (vk-utils:with-device (,device
+                            ,physical-device
+                            (vk:make-device-create-info
+                             :queue-create-infos (make-default-queue-create-infos ,physical-device ,surface)
+                             :enabled-extension-names ,(if enable-swapchain-p
+                                                           `(list vk:+khr-swapchain-extension-name+)
+                                                           `nil)))
+       (progn ,@body))))
 
 (defmacro with-instance-and-device ((instance device physical-device &key (app-name "sample") (window-extensions t) (log-levels '(:warning :error)) (message-types '(:validation)) (surface nil) (enable-swapchain-p nil)) &body body)
   `(with-instance (,instance

@@ -77,11 +77,11 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
         (user-data (gensym)))
     `(cffi:defcallback ,name %vk:bool32 ((,log-level %vk:debug-utils-message-severity-flag-bits-ext)
                                          (,message-type %vk:debug-utils-message-type-flags-ext)
-				         (,callback-data %vk:debug-utils-messenger-callback-data-ext)
+				         (,callback-data (:pointer (:struct %vk:debug-utils-messenger-callback-data-ext)))
 				         (,user-data :pointer))
        (,logger ,log-level
                 ,message-type
-                ,callback-data
+                (cffi:mem-aref ,callback-data '(:struct %vk:debug-utils-messenger-callback-data-ext))
                 ,(if user-data-type
                      `(cffi:mem-aref ,user-data ,user-data-type)
                      `,user-data))

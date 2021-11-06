@@ -89,6 +89,7 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
 
 (define-debug-utils-messenger-callback default-debug-utils-log-callback
     (lambda (log-level message-type message &rest rest)
+      (declare (ignore rest))
       (format t "[~a] ~a: ~a~%"
               log-level message-type (vk:message message))))
 

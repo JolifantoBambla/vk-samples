@@ -25,6 +25,8 @@
              :window-width window-width
              :window-height window-height
              :log-levels (:info :warning :error))
+    ;; Note: this is just here to fix a style warning about the unused graphics-queue...
+    (unless graphics-queue (warn "Graphics queue not set."))
     (with-simple-descriptor-set-layout (descriptor-set-layout
                                         device)
       (with-simple-pipeline-layout (pipeline-layout

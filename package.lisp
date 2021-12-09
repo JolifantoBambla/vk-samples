@@ -22,7 +22,7 @@
    #:with-render-pass
    #:with-shader-module
    #:with-compiled-shader-module
-   #:with-frame-buffers
+   #:with-framebuffers
    #:with-command-pool
    #:with-command-buffer
    #:record-command-buffer
@@ -42,8 +42,41 @@
    #:find-graphics-and-present-queue-family-indices
    #:determine-swapchain-extent
    #:pick-color-format
+   #:pick-depth-format
+   #:create-render-pass
    #:define-debug-utils-messenger-callback
-   #:default-debug-utils-log-callback))
+   #:default-debug-utils-log-callback
+   #:swapchain-data
+   #:color-format
+   #:images
+   #:swapchain
+   #:image-views
+   #:image-data
+   #:img-format
+   #:image
+   #:device-memory
+   #:image-view
+   #:buffer-data
+   #:buffer
+   #:device-memory
+   #:texture-data
+   #:tex-format
+   #:extent
+   #:needs-staging-p
+   #:staging-buffer-data
+   #:sampler
+   #:clear-handle-data
+   #:make-swapchain-data
+   #:allocated-device-memory
+   #:make-image-data
+   #:make-depth-buffer-data
+   #:make-buffer-data
+   #:make-texture-data
+   #:set-image-layout
+   #:set-texture-image
+   #:push-flag
+   #:one-time-submit
+   #:checkerboard-image-generator))
 
 (defpackage #:vk-samples/data
   (:use #:cl)

@@ -8,6 +8,11 @@
 
 (defparameter *fence-timeout* 100000000)
 
+(defun push-flag (flags flag)
+  (union
+   (if (listp flags) flags (list flags))
+   (list flag)))
+
 (defmacro with-allocated-memory ((memory device allocate-info) &body body)
   `(vk-utils:with-memory (,memory ,device ,allocate-info)
      (progn ,@body)))
@@ -50,7 +55,7 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
         for i from 0 below (vk:memory-type-count memory-properties)
         for property-flags = (cffi:foreign-bitfield-value '%vk:memory-property-flags
                                                           (vk:property-flags (nth i (vk:memory-types memory-properties))))
-        if (and (logand type-bits 1)
+        if (and (not (= (logand type-bits 1) 0))
                 (= (logand property-flags requirements-mask)
                    requirements-mask))
           return i
@@ -69,6 +74,48 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                    (and (member (vk:format f) '(:b8g8r8a8-unorm :r8g8b8a8-unorm :b8g8r8-unorm :r8g8b8-unorm))
                         (eq (vk:color-space f) :srgb-nonlinear-khr)))
                  surface-formats))))
+
+(defun pick-depth-format (physical-device)
+  (or (loop for f in '(:d32-sfloat :d32-sfloat-s8-uint :d23-unorm-s8-uint)
+            when (member :depth-stencil-attachment (vk:optimal-tiling-features (vk:get-physical-device-format-properties physical-device f)))
+            return f)
+      (error "failed to find supported depth format")))
+
+(defun create-render-pass (device color-format depth-format &optional (load-op :clear) (color-final-layout :present-src-khr))
+  (assert (not (eq color-format :undefined))
+          (color-format) "Color format must not be :undefined")
+  (let ((attachment-descriptions nil))
+    (unless (eq depth-format :undefined)
+      (push (vk:make-attachment-description
+           :format depth-format
+           :samples :1
+           :load-op load-op
+           :store-op :dont-care
+           :stencil-load-op :dont-care
+           :stencil-store-op :dont-care
+           :initial-layout :undefined
+           :final-layout :depth-stencil-attachment-optimal)
+            attachment-descriptions))
+    (push (vk:make-attachment-description
+           :format color-format
+           :samples :1
+           :load-op load-op
+           :store-op :store
+           :stencil-load-op :dont-care
+           :stencil-store-op :dont-care
+           :initial-layout :undefined
+           :final-layout color-final-layout)
+          attachment-descriptions)
+    (vk:create-render-pass device
+                           (vk:make-render-pass-create-info
+                            :attachments attachment-descriptions
+                            :subpasses (list (vk:make-subpass-description
+                                              :pipeline-bind-point :graphics
+                                              :color-attachments (list (vk:make-attachment-reference
+                                                                        :layout :color-attachment-optimal))
+                                              :depth-stencil-attachment (list (vk:make-attachment-reference
+                                                                               :attachment 1
+                                                                               :layout :depth-stencil-attachment-optimal))))))))
 
 (defmacro define-debug-utils-messenger-callback (name logger &optional (user-data-type nil))
   (let ((log-level (gensym))
@@ -856,3 +903,447 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                                                :range ,size))))
                                         nil)
              ,@body))))))
+
+
+(defclass swapchain-data ()
+  ((color-format
+    :initarg :color-format
+    :reader color-format)
+   (swapchain
+    :initarg :swapchain
+    :reader swapchain)
+   (images
+    :initarg :images
+    :reader images)
+   (image-views
+    :initarg :image-views
+    :reader image-views)))
+
+(defclass image-data ()
+  ((img-format
+    :initarg :format
+    :reader img-format)
+   (image
+    :initarg :image
+    :reader image)
+   (device-memory
+    :initarg :device-memory
+    :reader device-memory)
+   (image-view
+    :initarg :image-view
+    :reader image-view)))
+
+(defclass buffer-data ()
+  ((buffer
+    :initarg :buffer
+    :reader buffer)
+   (device-memory
+    :initarg :device-memory
+    :reader device-memory)))
+
+(defclass texture-data ()
+  ((tex-format
+    :initarg :format
+    :reader tex-format)
+   (extent
+    :initarg :extent
+    :reader extent)
+   (needs-staging-p
+    :initarg :needs-staging-p
+    :reader needs-staging-p)
+   (staging-buffer-data
+    :initarg :staging-buffer-data
+    :reader staging-buffer-data)
+   (image-data
+    :initarg :image-data
+    :reader image-data)
+   (sampler
+    :initarg :sampler
+    :reader sampler)))
+
+(defgeneric clear-handle-data (device handle-data)
+  (:method (device (handle-data swapchain-data))
+    (loop for image-view in (image-views handle-data)
+          do (vk:destroy-image-view device image-view))
+    (vk:destroy-swapchain-khr device (swapchain handle-data)))
+  (:method (device (handle-data buffer-data))
+    (vk:free-memory device (device-memory handle-data))
+    (vk:destroy-buffer device (buffer handle-data)))
+  (:method (device (handle-data image-data))
+    (vk:destroy-image-view device (image-view handle-data))
+    (vk:free-memory device (device-memory handle-data))
+    (vk:destroy-image device (image handle-data)))
+  (:method (device (handle-data texture-data))
+    (when (needs-staging-p handle-data)
+      (clear-handle-data device (staging-buffer-data handle-data)))
+    (clear-handle-data device (image-data handle-data))
+    (vk:destroy-sampler device (sampler handle-data))))
+
+(defun make-swapchain-data (physical-device
+                            device
+                            surface
+                            extent
+                            usage
+                            old-swapchain
+                            graphics-queue-family-index
+                            present-queue-family-index)
+  (let* ((surface-format (pick-color-format physical-device surface))
+         (color-format (vk:format surface-format))
+         (surface-capabilities (vk:get-physical-device-surface-capabilities-khr physical-device surface))
+         (swapchain-extent (determine-swapchain-extent physical-device surface (vk:width extent) (vk:height extent)))
+         (swapchain (vk:create-swapchain-khr device
+                                             (vk:make-swapchain-create-info-khr
+                                              :surface surface
+                                              :min-image-count (vk:min-image-count surface-capabilities)
+                                              :image-format color-format
+                                              :image-color-space (vk:color-space surface-format)
+                                              :image-extent swapchain-extent
+                                              :image-array-layers 1
+                                              :image-usage usage
+                                              :image-sharing-mode (if (= graphics-queue-family-index present-queue-family-index)
+                                                                      :exclusive
+                                                                      :concurrent)
+                                              :queue-family-indices (if (= graphics-queue-family-index present-queue-family-index)
+                                                                        (list graphics-queue-family-index)
+                                                                        (list graphics-queue-family-index
+                                                                              present-queue-family-index))
+                                              :pre-transform (if (member :identity (vk:supported-transforms surface-capabilities))
+                                                                 :identity
+                                                                 (vk:current-transform surface-capabilities))
+                                              :composite-alpha (cond
+                                                                 ((member :pre-multiplied (vk:supported-composite-alpha surface-capabilities))
+                                                                  :pre-multiplied)
+                                                                 ((member :post-multiplied (vk:supported-composite-alpha surface-capabilities))
+                                                                  :post-multiplied)
+                                                                 ((member :inherit (vk:supported-composite-alpha surface-capabilities))
+                                                                  :inherit)
+                                                                 (t :opaque))
+                                              :present-mode (let ((present-mode :fifo-khr))
+                                                              (or (loop for mode in (vk:get-physical-device-surface-present-modes-khr physical-device
+                                                                                                                                      surface)
+                                                                        when (eq mode :mailbox-khr) return mode
+                                                                        when (eq mode :immediate) do (setf present-mode mode))
+                                                                  present-mode))
+                                              :clipped t
+                                              :old-swapchain old-swapchain)))
+         (images (vk:get-swapchain-images-khr device swapchain)))
+    (make-instance 'swapchain-data
+                   :color-format color-format
+                   :swapchain swapchain
+                   :images images
+                   :image-views (loop for image in images
+                                      collect (vk:create-image-view device
+                                                                    (vk:make-image-view-create-info
+                                                                     :image image
+                                                                     :view-type :2d
+                                                                     :format color-format
+                                                                     :components (vk:make-component-mapping
+                                                                                  :r :r
+                                                                                  :g :g
+                                                                                  :b :b
+                                                                                  :a :a)
+                                                                     :subresource-range (vk:make-image-subresource-range
+                                                                                         :aspect-mask :color
+                                                                                         :base-mip-level 0
+                                                                                         :level-count 1
+                                                                                         :base-array-layer 0
+                                                                                         :layer-count 1)))))))
+
+(defun allocate-device-memory (device physical-device memory-requirements memory-property-flags)
+  (vk:allocate-memory device
+                      (vk:make-memory-allocate-info
+                       :allocation-size (vk:size memory-requirements)
+                       :memory-type-index (find-type-index physical-device memory-requirements memory-property-flags))))
+
+(defun make-image-data (physical-device device img-format extent tiling usage initial-layout memory-properties aspect-mask)
+  (let* ((image (vk:create-image device (vk:make-image-create-info
+                                         :image-type :2d
+                                         :format img-format
+                                         :extent (vk:make-extent-3d
+                                                  :width (vk:width extent)
+                                                  :height (vk:height extent)
+                                                  :depth 1)
+                                         :mip-levels 1
+                                         :array-layers 1
+                                         :samples :1
+                                         :tiling tiling
+                                         :usage (if (listp usage)
+                                                    (concatenate 'list usage '(:sampled))
+                                                    (list usage :sampled))
+                                         :sharing-mode :exclusive
+                                         :initial-layout initial-layout)))
+         (device-memory (allocate-device-memory device
+                                                physical-device
+                                                (vk:get-image-memory-requirements device image)
+                                                memory-properties)))
+    (vk:bind-image-memory device image device-memory 0)
+    (make-instance 'image-data
+                   :format img-format
+                   :image image
+                   :device-memory device-memory
+                   :image-view (vk:create-image-view device
+                                                     (vk:make-image-view-create-info
+                                                      :image image
+                                                      :view-type :2d
+                                                      :format img-format
+                                                      :components (vk:make-component-mapping
+                                                                   :r :r
+                                                                   :g :g
+                                                                   :b :b
+                                                                   :a :a)
+                                                      :subresource-range (vk:make-image-subresource-range
+                                                                          :aspect-mask aspect-mask
+                                                                          :level-count 1
+                                                                          :layer-count 1))))))
+
+(defun make-depth-buffer-data (physical-device device depth-format extent)
+  (make-image-data physical-device
+                   device
+                   depth-format
+                   extent
+                   :optimal
+                   :depth-stencil-attachment
+                   :undefined
+                   :device-local
+                   :depth))
+
+(defun make-buffer-data (physical-device
+                         device
+                         size
+                         usage
+                         &optional (property-flags '(:host-visible :host-coherent)))
+  (let* ((buffer (vk:create-buffer device
+                                   (vk:make-buffer-create-info
+                                    :size size
+                                    :usage usage
+                                    :sharing-mode :exclusive)))
+         (device-memory (allocate-device-memory device
+                                                physical-device
+                                                (vk:get-buffer-memory-requirements device buffer)
+                                                property-flags)))
+    (vk:bind-buffer-memory device buffer device-memory 0)
+    (make-instance 'buffer-data
+                   :buffer buffer
+                   :device-memory device-memory)))
+
+(defun make-texture-data (physical-device
+                          device
+                          &optional
+                            (extent (vk:make-extent-2d :width 256 :height 256))
+                            usage-flags
+                            format-feature-flags
+                            enable-anisotropy-p
+                            force-staging-p)
+  (let* ((tex-format :r8g8b8a8-unorm)
+         (format-properties (vk:get-physical-device-format-properties physical-device tex-format))
+         (feature-flags (push-flag format-feature-flags
+                                   :sampled-image))
+         (needs-staging-p (or force-staging-p
+                              (some (lambda (flag)
+                                      (not (member flag (vk:linear-tiling-features format-properties))))
+                                    feature-flags)))
+         (image-tiling (if needs-staging-p
+                           :optimal
+                           :linear))
+         (initial-layout (if needs-staging-p
+                             :undefined
+                             :preinitialized))
+         (staging-buffer-data (when needs-staging-p
+                                (make-buffer-data physical-device
+                                                  device
+                                                  (* (vk:width extent)
+                                                     (vk:height extent)
+                                                     4)
+                                                  :transfer-src)))
+         (image-data (make-image-data physical-device
+                                      device
+                                      tex-format
+                                      extent
+                                      image-tiling
+                                      (push-flag (if needs-staging-p
+                                                     (push-flag usage-flags :transfer-dst)
+                                                     usage-flags)
+                                                 :sampled)
+                                      initial-layout
+                                      ;;'(:host-coherent :host-visible)
+                                      (unless needs-staging-p '(:host-coherent :host-visible))
+                                      :color))
+         (sampler (vk:create-sampler device
+                                     (vk:make-sampler-create-info
+                                      :mag-filter :linear
+                                      :min-filter :linear
+                                      :mipmap-mode :linear
+                                      :address-mode-u :repeat
+                                      :address-mode-v :repeat
+                                      :address-mode-w :repeat
+                                      :anisotropy-enable enable-anisotropy-p
+                                      :max-anisotropy 16.0
+                                      :compare-op :never
+                                      :border-color :float-opaque-black))))
+    (make-instance 'texture-data
+                   :format tex-format
+                   :needs-staging-p needs-staging-p
+                   :staging-buffer-data staging-buffer-data
+                   :extent extent
+                   :image-data image-data
+                   :sampler sampler)))
+
+(defun set-image-layout (command-buffer image img-format old-image-layout new-image-layout)
+  (let* ((source-access-mask (cond
+                               ((eq :transfer-dst-optimal old-image-layout)
+                                '(:transfer-write))
+                               ((eq :preinitialized old-image-layout)
+                                '(:host-write))
+                               ((not (or (eq :general old-image-layout)
+                                         (eq :undefined old-image-layout)))
+                                (error "illegal OLD-IMAGE-LAYOUT: ~s" old-image-layout))))
+         (source-stage (cond
+                         ((member old-image-layout '(:general :preinitialized))
+                          '(:host))
+                         ((eq :transfer-dst-optimal old-image-layout)
+                          '(:transfer))
+                         ((eq :undefined old-image-layout)
+                          '(:top-of-pipe))
+                         (t (error "illegal OLD-IMAGE-LAYOUT: ~s" old-image-layout))))
+         (destination-access-mask (cond
+                                    ((eq :color-attachment-optimal new-image-layout)
+                                     '(:color-attachment-write))
+                                    ((eq :depth-stencil-attachment-optimal new-image-layout)
+                                     '(:depth-stencil-attachment-read :depth-stencil-attachment-write))
+                                    ((eq :shader-read-only-optimal new-image-layout)
+                                     '(:shader-read))
+                                    ((eq :transfer-src-optimal new-image-layout)
+                                     '(:transfer-read))
+                                    ((eq :transfer-dst-optimal new-image-layout)
+                                     '(:transfer-write))
+                                    ((not (member new-image-layout '(:general :present-src-khr)))
+                                     (error "illegal NEW-IMAGE-LAYOUT: ~s" new-image-layout))))
+         (destination-stage (cond
+                              ((eq :color-attachment-optimal new-image-layout)
+                               '(:color-attachment-output))
+                              ((eq :depth-stencil-attachment-optimal new-image-layout)
+                               '(:early-fragment-tests))
+                              ((eq :general new-image-layout)
+                               '(:host))
+                              ((eq :present-src-khr new-image-layout)
+                               '(:bottom-of-pipe))
+                              ((eq :shader-read-only-optimal new-image-layout)
+                               '(:fragment-shader))
+                              ((member new-image-layout '(:transfer-dst-optimal :transfer-src-optimal))
+                               '(:transfer))
+                              (t (error "illegal NEW-IMAGE-LAYOUT: ~s" new-image-layout))))
+         (aspect-mask (if (eq :depth-stencil-attachment-optimal new-image-layout)
+                          (if (member img-format '(:d32-sfloat-s8-uint :d24-unorm-s8-uint))
+                              '(:stencil :depth)
+                              '(:depth))
+                          '(:color)))
+         (image-subresource-range (vk:make-image-subresource-range
+                                   :aspect-mask aspect-mask
+                                   :level-count 1
+                                   :layer-count 1))
+         (image-memory-barrier (vk:make-image-memory-barrier
+                                :src-access-mask source-access-mask
+                                :dst-access-mask destination-access-mask
+                                :old-layout old-image-layout
+                                :new-layout new-image-layout
+                                :src-queue-family-index vk:+queue-family-ignored+
+                                :dst-queue-family-index vk:+queue-family-ignored+
+                                :image image
+                                :subresource-range image-subresource-range)))
+    (vk:cmd-pipeline-barrier command-buffer
+                             nil
+                             nil
+                             (list image-memory-barrier)
+                             source-stage
+                             destination-stage)))
+
+(defun set-texture-image (texture-data device command-buffer image-generator)
+  (with-slots (needs-staging-p
+               staging-buffer-data
+               image-data
+               extent)
+      texture-data
+    (copy-to-device device
+                    (device-memory (if needs-staging-p
+                                       staging-buffer-data
+                                       image-data))
+                    (funcall image-generator extent)
+                    :uint8)
+    (with-slots (image img-format) image-data
+      (if needs-staging-p
+          (with-slots ((width vk:width)
+                       (height vk:height))
+              extent
+            (set-image-layout command-buffer
+                              image
+                              img-format
+                              :undefined
+                              :transfer-dst-optimal)
+            (vk:cmd-copy-buffer-to-image command-buffer
+                                         (buffer staging-buffer-data)
+                                         image
+                                         :transfer-dst-optimal
+                                         (list
+                                          (vk:make-buffer-image-copy
+                                           :buffer-offset 0
+                                           :buffer-row-length width
+                                           :buffer-image-height height
+                                           :image-subresource (vk:make-image-subresource-layers
+                                                               :aspect-mask :color
+                                                               :mip-level 0
+                                                               :base-array-layer 0
+                                                               :layer-count 1)
+                                           :image-offset (vk:make-offset-3d
+                                                          :x 0
+                                                          :y 0
+                                                          :z 0)
+                                           :image-extent (vk:make-extent-3d
+                                                          :width width
+                                                          :height height
+                                                          :depth 1))))
+            (set-image-layout command-buffer
+                              image
+                              img-format
+                              :transfer-dst-optimal
+                              :shader-read-only-optimal))
+          (set-image-layout command-buffer
+                            image
+                            img-format
+                            :preinitialized
+                            :shader-read-only-optimal)))))
+
+(defun one-time-submit (device command-pool queue func)
+  (let ((command-buffer (first (vk:allocate-command-buffers device
+                                                            (vk:make-command-buffer-allocate-info
+                                                             :command-pool command-pool
+                                                             :level :primary
+                                                             :command-buffer-count 1)))))
+    (vk:begin-command-buffer command-buffer
+                             (vk:make-command-buffer-begin-info
+                              :flags '(:one-time-submit)))
+    (funcall func command-buffer)
+    (vk:end-command-buffer command-buffer)
+    (vk:queue-submit queue
+                     (list (vk:make-submit-info
+                            :command-buffers (list command-buffer))))
+    (vk:queue-wait-idle queue)))
+
+(defun checkerboard-image-generator  (&optional (rgb0 #(0 0 0)) (rgb1 #(255 255 255)))
+  (lambda (extent)
+    (with-slots ((width vk:width)
+                 (height vk:height))
+        extent
+      (let ((data (make-array (* width height 4) :element-type '(unsigned-byte 8) :initial-element 255)))
+        (loop for row from 0 below height
+              do (loop for column from 0 below width
+                       for idx = (* 4 (+ column (* row width))) 
+                       for rgb = (if (= 0
+                                        (logxor (min (logand row #x10) 1)
+                                                (min (logand column #x10) 1)))
+                                     rgb1
+                                     rgb0)
+                       do
+                       (setf (elt data idx) (elt rgb 0))
+                       (setf (elt data (+ idx 1)) (elt rgb 1))
+                       (setf (elt data (+ idx 2)) (elt rgb 2))))
+        data))))

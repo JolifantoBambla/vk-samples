@@ -46,6 +46,7 @@
    #:create-render-pass
    #:define-debug-utils-messenger-callback
    #:default-debug-utils-log-callback
+   #:create-graphics-pipeline
    #:swapchain-data
    #:color-format
    #:images
@@ -76,6 +77,7 @@
    #:set-texture-image
    #:push-flag
    #:one-time-submit
+   #:copy-to-buffer
    #:checkerboard-image-generator))
 
 (defpackage #:vk-samples/data

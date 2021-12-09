@@ -904,6 +904,42 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                         nil)
              ,@body))))))
 
+(defun create-graphics-pipeline (device
+                                 pipeline-cache
+                                 vertex-shader-data
+                                 fragment-shader-data
+                                 vertex-stride
+                                 vertex-input-attribute-offset
+                                 front-face
+                                 depth-buffered
+                                 pipeline-layout
+                                 renderpass)
+  (let* ((pipeline-shader-stage-create-infos (list (vk:make-pipeline-shader-stage-create-info
+                                                    :stage :vertex
+                                                    :module (first vertex-shader-data)
+                                                    :name "main"
+                                                    :specialization-info (second vertex-shader-data))
+                                                   (vk:make-pipeline-shader-stage-create-info
+                                                    :stage :fragment
+                                                    :module (first fragment-shader-data)
+                                                    :name "main"
+                                                    :specialization-info (second fragment-shader-data))))
+         (vertex-input-attribute-descriptions (when (< 0 vertex-stride)
+                                                (loop for offset in vertex-input-attribute-offset
+                                                      for i from 0
+                                                      collect (vk:make-vertex-input-attribute-description
+                                                               :location i
+                                                               :binding 0
+                                                               :format (first offset)
+                                                               :offset (second offset)))))
+         (vertex-input-binding-description (vk:make-vertex-input-binding-description
+                                            :binding 0
+                                            :stride vertex-stride
+                                            :input-rate :vertex))
+         (pipeline-vertex-input-state-create-info (when (< 0 vertex-stride)
+                                                    (vk:make-pipeline-vertex-input-state-create-info
+                                                     :vertex-binding-descriptions (list vertex-input-binding-description)
+                                                     :vertex-attribute-descriptions vertex-input-attribute-descriptions))))))
 
 (defclass swapchain-data ()
   ((color-format
@@ -1125,6 +1161,36 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
     (make-instance 'buffer-data
                    :buffer buffer
                    :device-memory device-memory)))
+
+(defun copy-to-buffer (buffer-data
+                       physical-device
+                       device
+                       command-pool
+                       queue
+                       data
+                       data-type)
+  (let* ((data-size (* (cffi:foreign-type-size data-type)
+                       (length data)))
+         (staging-buffer (make-buffer-data physical-device
+                                           device
+                                           data-size
+                                           '(:transfer-src))))
+    (copy-to-device device
+                    (device-memory staging-buffer)
+                    data
+                    data-type)
+    (one-time-submit device
+                     command-pool
+                     queue
+                     (lambda (command-buffer)
+                       (vk:cmd-copy-buffer command-buffer
+                                           (buffer staging-buffer)
+                                           (buffer buffer-data)
+                                           (list (vk:make-buffer-copy
+                                                  :src-offset 0
+                                                  :dst-offset 0
+                                                  :size data-size)))))
+    (clear-handle-data device staging-buffer)))
 
 (defun make-texture-data (physical-device
                           device

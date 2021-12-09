@@ -200,6 +200,202 @@ void main()
   }
 }")
 
+(defclass uniform-buffer-object ()
+  ((model
+    :initarg :model
+    :reader model)
+   (view
+    :initarg :view
+    :reader view)
+   (proj
+    :initarg :proj
+    :reader proj)
+   (model-i-t
+    :initarg :model-i-t
+    :reader model-i-t)
+   (view-inverse
+    :initarg :view-inverse
+    :reader view-inverse)
+   (proj-inverse
+    :initarg :proj-inverse
+    :reader proj-inverse)))
+
+(defclass material ()
+  ((diffuse
+    :initarg :diffuse
+    :initform (rtg-math:v! 0.7 0.7 0.7)
+    :reader diffuse)
+   (texture-id
+    :initarg :texture-id
+    :initform -1
+    :reader texture-id)))
+
+(defclass vertex ()
+  ((pos
+    :initarg :pos
+    :reader pos)
+   (nrm
+    :initarg :nrm
+    :reader nrm)
+   (tex-coord
+    :initarg :tex-coord
+    :reader tex-coord)
+   (mat-id
+    :initarg :mat-id
+    :initform 0
+    :reader mat-id)))
+
+(defun v! (pos nrm tex-coord mat-id)
+  (make-instance 'vertex
+                 :pos pos
+                 :nrm nrm
+                 :tex-coord tex-coord
+                 :mat-id mat-id))
+
+(defmacro stride (num-floats num-ints)
+  (* 16
+     (floor (/ (+ (* (cffi:foreign-type-size :float)
+                     num-floats)
+                  (* (cffi:foreign-type-size :int)
+                     num-ints)
+                  15)
+               16))))
+
+(defconstant +material-stride+
+  (stride 3 1))
+
+(defconstant +vertex-stride+
+  (stride 8 1))
+
+(cffi:defcstruct (uniform-buffer-object :class c-uniform-buffer-object)
+  (model :float :count 16)
+  (view :float :count 16)
+  (proj :float :count 16)
+  (model-i-t :float :count 16)
+  (view-inverse :float :count 16)
+  (proj-inverse :float :count 16))
+
+(cffi:defcstruct (material :size #.+material-stride+ :class c-material)
+  (diffuse :float :count 3)
+  (texture-id :int))
+
+(cffi:defcstruct (vertex :size #.+vertex-stride+ :class c-vertex)
+  (pos :float :count 3)
+  (nrm :float :count 3)
+  (tex-coord :float :count 2)
+  (mat-id :int))
+
+(defmethod cffi:translate-into-foreign-memory (value (type c-uniform-buffer-object) ptr)
+  (cffi:with-foreign-slots ((model view proj model-i-t view-inverse proj-inverse)
+                            ptr
+                            (:struct uniform-buffer-object))
+    (cffi:lisp-array-to-foreign (model value) model '(:array :float 16))
+    (cffi:lisp-array-to-foreign (view value) view '(:array :float 16))
+    (cffi:lisp-array-to-foreign (proj value) proj '(:array :float 16))
+    (cffi:lisp-array-to-foreign (model-i-t value) model-i-t '(:array :float 16))
+    (cffi:lisp-array-to-foreign (view-inverse value) view-inverse '(:array :float 16))
+    (cffi:lisp-array-to-foreign (proj-inverse value) proj-inverse '(:array :float 16))))
+
+(defmethod cffi:expand-into-foreign-memory (value (type c-uniform-buffer-object) ptr)
+  `(cffi:with-foreign-slots ((model view proj model-i-t view-inverse proj-inverse)
+                             ,ptr
+                             (:struct uniform-buffer-object))
+     (cffi:lisp-array-to-foreign (model ,value) model '(:array :float 16))
+     (cffi:lisp-array-to-foreign (view ,value) view '(:array :float 16))
+     (cffi:lisp-array-to-foreign (proj ,value) proj '(:array :float 16))
+     (cffi:lisp-array-to-foreign (model-i-t ,value) model-i-t '(:array :float 16))
+     (cffi:lisp-array-to-foreign (view-inverse ,value) view-inverse '(:array :float 16))
+     (cffi:lisp-array-to-foreign (proj-inverse ,value) proj-inverse '(:array :float 16))))
+
+(defmethod cffi:translate-into-foreign-memory (value (type c-material) ptr)
+  (cffi:with-foreign-slots ((diffuse texture-id)
+                            ptr
+                            (:struct material))
+    (cffi:lisp-array-to-foreign (diffuse value) diffuse '(:array :float 3))
+    (setf texture-id (texture-id value))))
+
+(defmethod cffi:expand-into-foreign-memory (value (type c-material) ptr)
+  `(cffi:with-foreign-slots ((diffuse texture-id)
+                             ,ptr
+                             (:struct material))
+     (cffi:lisp-array-to-foreign (diffuse ,value) diffuse '(:array :float 3))
+     (setf texture-id (texture-id ,value))))
+
+(defmethod cffi:translate-into-foreign-memory (value (type c-vertex) ptr)
+  (cffi:with-foreign-slots ((pos nrm tex-coord mat-id)
+                            ptr
+                            (:struct vertex))
+    (cffi:lisp-array-to-foreign (pos value) pos '(:array :float 3))
+    (cffi:lisp-array-to-foreign (nrm value) nrm '(:array :float 3))
+    (cffi:lisp-array-to-foreign (tex-coord value) tex-coord '(:array :float 2))
+    (setf mat-id (mat-id value))))
+
+(defmethod cffi:expand-into-foreign-memory (value (type c-vertex) ptr)
+  `(cffi:with-foreign-slots ((pos nrm tex-coord mat-id)
+                             ,ptr
+                             (:struct vertex))
+     (cffi:lisp-array-to-foreign (pos ,value) pos '(:array :float 3))
+     (cffi:lisp-array-to-foreign (nrm ,value) nrm '(:array :float 3))
+     (cffi:lisp-array-to-foreign (tex-coord ,value) tex-coord '(:array :float 2))
+     (setf mat-id (mat-id ,value))))
+
+(defparameter +cube-data+
+  (coerce
+   (list
+    ;;  pos                          nrm                          tex-coord             mat-id
+    ;; front face
+    (v! (rtg-math:v! -1.0 -1.0  1.0) (rtg-math:v!  0.0  0.0  1.0) (rtg-math:v! 0.0 0.0) 0)
+    (v! (rtg-math:v!  1.0 -1.0  1.0) (rtg-math:v!  0.0  0.0  1.0) (rtg-math:v! 1.0 0.0) 0)
+    (v! (rtg-math:v!  1.0  1.0  1.0) (rtg-math:v!  0.0  0.0  1.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v!  1.0  1.0  1.0) (rtg-math:v!  0.0  0.0  1.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v! -1.0  1.0  1.0) (rtg-math:v!  0.0  0.0  1.0) (rtg-math:v! 0.0 1.0) 0)
+    (v! (rtg-math:v! -1.0 -1.0  1.0) (rtg-math:v!  0.0  0.0  1.0) (rtg-math:v! 0.0 0.0) 0)
+    ;; back face
+    (v! (rtg-math:v!  1.0 -1.0 -1.0) (rtg-math:v!  0.0  0.0 -1.0) (rtg-math:v! 0.0 0.0) 0)
+    (v! (rtg-math:v! -1.0 -1.0 -1.0) (rtg-math:v!  0.0  0.0 -1.0) (rtg-math:v! 1.0 0.0) 0)
+    (v! (rtg-math:v! -1.0  1.0 -1.0) (rtg-math:v!  0.0  0.0 -1.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v! -1.0  1.0 -1.0) (rtg-math:v!  0.0  0.0 -1.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v!  1.0  1.0 -1.0) (rtg-math:v!  0.0  0.0 -1.0) (rtg-math:v! 0.0 1.0) 0)
+    (v! (rtg-math:v!  1.0 -1.0 -1.0) (rtg-math:v!  0.0  0.0 -1.0) (rtg-math:v! 0.0 0.0) 0)
+    ;; left face
+    (v! (rtg-math:v! -1.0 -1.0 -1.0) (rtg-math:v! -1.0  0.0  0.0) (rtg-math:v! 0.0 0.0) 0)
+    (v! (rtg-math:v! -1.0 -1.0  1.0) (rtg-math:v! -1.0  0.0  0.0) (rtg-math:v! 1.0 0.0) 0)
+    (v! (rtg-math:v! -1.0  1.0  1.0) (rtg-math:v! -1.0  0.0  0.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v! -1.0  1.0  1.0) (rtg-math:v! -1.0  0.0  0.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v! -1.0  1.0 -1.0) (rtg-math:v! -1.0  0.0  0.0) (rtg-math:v! 0.0 1.0) 0)
+    (v! (rtg-math:v! -1.0 -1.0 -1.0) (rtg-math:v! -1.0  0.0  0.0) (rtg-math:v! 0.0 0.0) 0)
+    ;; right face
+    (v! (rtg-math:v!  1.0 -1.0  1.0) (rtg-math:v!  1.0  0.0  0.0) (rtg-math:v! 0.0 0.0) 0)
+    (v! (rtg-math:v!  1.0 -1.0 -1.0) (rtg-math:v!  1.0  0.0  0.0) (rtg-math:v! 1.0 0.0) 0)
+    (v! (rtg-math:v!  1.0  1.0 -1.0) (rtg-math:v!  1.0  0.0  0.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v!  1.0  1.0 -1.0) (rtg-math:v!  1.0  0.0  0.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v!  1.0  1.0  1.0) (rtg-math:v!  1.0  0.0  0.0) (rtg-math:v! 0.0 1.0) 0)
+    (v! (rtg-math:v!  1.0 -1.0  1.0) (rtg-math:v!  1.0  0.0  0.0) (rtg-math:v! 0.0 0.0) 0)
+    ;; top face
+    (v! (rtg-math:v! -1.0  1.0  1.0) (rtg-math:v!  0.0  1.0  0.0) (rtg-math:v! 0.0 0.0) 0)
+    (v! (rtg-math:v!  1.0  1.0  1.0) (rtg-math:v!  0.0  1.0  0.0) (rtg-math:v! 1.0 0.0) 0)
+    (v! (rtg-math:v!  1.0  1.0 -1.0) (rtg-math:v!  0.0  1.0  0.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v!  1.0  1.0 -1.0) (rtg-math:v!  0.0  1.0  0.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v! -1.0  1.0 -1.0) (rtg-math:v!  0.0  1.0  0.0) (rtg-math:v! 0.0 1.0) 0)
+    (v! (rtg-math:v! -1.0  1.0  1.0) (rtg-math:v!  0.0  1.0  0.0) (rtg-math:v! 0.0 0.0) 0)
+    ;; bottom face
+    (v! (rtg-math:v! -1.0 -1.0 -1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 0.0 0.0) 0)
+    (v! (rtg-math:v!  1.0 -1.0 -1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 1.0 0.0) 0)
+    (v! (rtg-math:v!  1.0 -1.0  1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v!  1.0 -1.0  1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 1.0 1.0) 0)
+    (v! (rtg-math:v! -1.0 -1.0  1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 0.0 1.0) 0)
+    (v! (rtg-math:v! -1.0 -1.0 -1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 0.0 0.0) 0))
+   'vector))
+
+(defun random-in-range (min-value max-value)
+  (+ (random (- max-value min-value))
+     min-value))
+
+(defun random-vec3 (min-value max-value)
+  (rtg-math:v! (random-in-range min-value max-value)
+               (random-in-range min-value max-value)
+               (random-in-range min-value max-value)))
+
 (defclass per-frame-data ()
   ((command-pool
     :initarg :command-pool
@@ -245,8 +441,8 @@ void main()
                                  :render-complete-semaphore (vk:create-semaphore device
                                                                                  (vk:make-semaphore-create-info))))))
 
-(defun make-textures (physical-device device enable-sampler-anisotropy-p command-pool graphics-queue)
-  (let ((textures (loop for i from 0 below 10
+(defun make-textures (physical-device device enable-sampler-anisotropy-p command-pool graphics-queue &optional (num-textures 10))
+  (let ((textures (loop for i from 0 below num-textures
                         collect (make-texture-data physical-device
                                                    device
                                                    (vk:make-extent-2d
@@ -273,6 +469,73 @@ void main()
                                                             (random 255)))))))
     textures))
 
+(defun make-materials-buffer (physical-device device num-textures)
+  (let ((materials (loop for i from 0 below num-textures
+                         collect (make-instance 'material
+                                                :diffuse (random-vec3 0.0 1.0)
+                                                :texture-id i)))
+        (buffer (make-buffer-data physical-device
+                                  device
+                                  (* num-textures
+                                     +material-stride+)
+                                  '(:storage-buffer))))
+    (copy-to-device device
+                    (device-memory buffer)
+                    materials
+                    '(:struct material))
+    buffer))
+
+(defun make-vertex-buffer (physical-device device command-pool queue num-materials &optional (x-max 10) (y-max 10) (z-max 10))
+  (let* ((vertices (loop for x from 0 below x-max
+                         return (loop for y from 0 below y-max
+                                      return (loop for z from 0 below z-max
+                                                   for m = (random num-materials)
+                                                   for jitter = (random-vec3 0.0 0.6)
+                                                   return (loop for v across +cube-data+
+                                                                collect (v! (rtg-math.vector3:*s
+                                                                             (rtg-math.vector3:+ (pos v)
+                                                                                                 jitter)
+                                                                             3.0)
+                                                                            (nrm v)
+                                                                            (tex-coord v)
+                                                                            m))))))
+         (vertex-buffer (make-buffer-data physical-device
+                                          device
+                                          (* (length vertices)
+                                             +vertex-stride+)
+                                          '(:transfer-dst
+                                            :vertex-buffer
+                                            :storage-buffer)
+                                          :device-local)))
+    (copy-to-buffer vertex-buffer
+                    physical-device
+                    device
+                    command-pool
+                    queue
+                    vertices
+                    '(:struct vertex))
+    vertex-buffer))
+
+(defun make-vertex-index-buffer (physical-device device command-pool queue num-vertices)
+  (let* ((indices (loop for i from 0 below num-vertices
+                        collect i))
+         (vertex-index-buffer (make-buffer-data physical-device
+                                                device
+                                                (* (length indices)
+                                                   (cffi:foreign-type-size :uint32))
+                                                '(:transfer-dst
+                                                  :index-buffer
+                                                  :storage-buffer)
+                                                :device-local)))
+    (copy-to-buffer vertex-index-buffer
+                    physical-device
+                    device
+                    command-pool
+                    queue
+                    indices
+                    :uint32)
+    vertex-index-buffer))
+
 (defun make-descriptor-pool (device pool-sizes)
   (let ((max-sets (reduce #'+ (map 'list #'vk:descriptor-count pool-sizes))))
     (vk:create-descriptor-pool device
@@ -280,6 +543,19 @@ void main()
                                 :flags '(:free-descriptor-set)
                                 :max-sets max-sets
                                 :pool-sizes pool-sizes))))
+
+(defun make-descriptor-set-layout (device binding-data &optional flags)
+  (vk:create-descriptor-set-layout
+   device
+   (vk:make-descriptor-set-layout-create-info
+    :flags flags
+    :bindings (loop for (descriptor-type descriptor-count stage-flags) in binding-data
+                    for i from 0
+                    collect (vk:make-descriptor-set-layout-binding
+                             :binding i
+                             :descriptor-type descriptor-type
+                             :descriptor-count descriptor-count
+                             :stage-flags stage-flags)))))
 
 (defun supports-extensions-p (physical-device extensions)
   (let ((extension-names (map 'list
@@ -290,7 +566,10 @@ void main()
 
 (defun ray-tracing (&optional (app-name "ray-tracing")
                               (window-width 1280)
-                              (window-height 720))
+                              (window-height 720)
+                              (x-max 10)
+                              (y-max 10)
+                              (z-max 10))
   (glfw:with-init-window (:title app-name
                           :width window-width
                           :height window-height
@@ -365,7 +644,58 @@ void main()
                                               device
                                               enable-sampler-anisotropy-p
                                               (command-pool (first per-frame-data))
-                                              graphics-queue)))
+                                              graphics-queue))
+                     (material-buffer-data (make-materials-buffer physical-device device (length textures)))
+                     (num-vertices (* x-max y-max z-max (length +cube-data+)))
+                     (vertex-buffer-data (make-vertex-buffer physical-device
+                                                             device
+                                                             (command-pool (first per-frame-data))
+                                                             graphics-queue
+                                                             (length textures)
+                                                             x-max
+                                                             y-max
+                                                             z-max))
+                     (vertex-index-buffer-data (make-vertex-index-buffer physical-device
+                                                                         device
+                                                                         (command-pool (first per-frame-data))
+                                                                         graphics-queue
+                                                                         num-vertices))
+                     (uniform-buffer-data (make-buffer-data physical-device
+                                                            device
+                                                            (cffi:foreign-type-size '(:struct uniform-buffer-object))
+                                                            '(:uniform-buffer)))
+                     (descriptor-set-layout (make-descriptor-set-layout device
+                                                                        (list '(:uniform-buffer 1 (:vertex))
+                                                                              '(:storage-buffer 1 (:vertex :fragment))
+                                                                              (list :combined-image-sampler
+                                                                                    (length textures)
+                                                                                    '(:fragment)))))
+                     (pipeline-layout (vk:create-pipeline-layout device
+                                                                 (vk:make-pipeline-layout-create-info
+                                                                  :set-layouts (list descriptor-set-layout))))
+                     (vertex-shader-module (vk:create-shader-module device
+                                                                    (vk:make-shader-module-create-info
+                                                                     :code (shaderc:compile-to-spv *vertex-shader*
+                                                                                                   :vertex-shader))))
+                     (fragment-shader-module (vk:create-shader-module device
+                                                                      (vk:make-shader-module-create-info
+                                                                       :code (shaderc:compile-to-spv *fragment-shader*
+                                                                                                     :fragment-shader))))
+                     (graphics-pipeline (create-graphics-pipeline device
+                                                                  nil
+                                                                  (list vertex-shader-module nil)
+                                                                  (list fragment-shader-module nil)
+                                                                  +vertex-stride+
+                                                                  (list
+                                                                   (:r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) pos))
+                                                                   (:r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) nrm))
+                                                                   (:r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) tex-coord))
+                                                                   (:r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) mat-id)))
+                                                                  :counter-clockwise
+                                                                  t
+                                                                  pipeline-layout
+                                                                  render-pass))
+                     (transform (rtg-math.matrix4:identity)))
                 (unwind-protect
                      (with-framebuffers (framebuffers
                                          device
@@ -374,6 +704,14 @@ void main()
                                          (image-view depth-buffer-data)
                                          window-extent)
                        )
+                  (vk:destroy-shader-module device fragment-shader-module)
+                  (vk:destroy-shader-module device vertex-shader-module)
+                  (vk:destroy-pipeline-layout device pipeline-layout)
+                  (vk:destroy-descriptor-set-layout device descriptor-set-layout)
+                  (clear-handle-data device uniform-buffer-data)
+                  (clear-handle-data device vertex-index-buffer-data)
+                  (clear-handle-data device vertex-buffer-data)
+                  (clear-handle-data device material-buffer-data)
                   (loop for texture in textures
                         do (clear-handle-data device texture))
                   (clear-handle-data device depth-buffer-data)

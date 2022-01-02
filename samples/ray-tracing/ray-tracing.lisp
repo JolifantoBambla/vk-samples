@@ -957,7 +957,75 @@ void main()
                                                                                                    (command-pool (first per-frame-data))
                                                                                                    graphics-queue
                                                                                                    transform
-                                                                                                   bottom-level-acceleration-structure)))
+                                                                                                   bottom-level-acceleration-structure))
+                     (bindings (progn
+                                 (one-time-submit device
+                                                  (command-pool (first per-frame-data))
+                                                  graphics-queue
+                                                  (lambda (command-buffer)
+                                                    (vk:cmd-pipeline-barrier command-buffer
+                                                                             nil
+                                                                             (list (vk:make-buffer-memory-barrier
+                                                                                    :src-access-mask nil
+                                                                                    :dst-access-mask '(:shader-read)
+                                                                                    :src-queue-family-index vk:+queue-family-ignored+
+                                                                                    :dst-queue-family-index vk:+queue-family-ignored+
+                                                                                    :buffer (buffer vertex-buffer-data)
+                                                                                    :offset 0
+                                                                                    :size vk:+whole-size+))
+                                                                             nil
+                                                                             '(:all-commands)
+                                                                             '(:all-commands)
+                                                                             nil)
+                                                    (vk:cmd-pipeline-barrier command-buffer
+                                                                             nil
+                                                                             (list (vk:make-buffer-memory-barrier
+                                                                                    :src-access-mask nil
+                                                                                    :dst-access-mask '(:shader-read)
+                                                                                    :src-queue-family-index vk:+queue-family-ignored+
+                                                                                    :dst-queue-family-index vk:+queue-family-ignored+
+                                                                                    :buffer (buffer vertex-index-buffer-data)
+                                                                                    :offset 0
+                                                                                    :size vk:+whole-size+))
+                                                                             nil
+                                                                             '(:all-commands)
+                                                                             '(:all-commands)
+                                                                             nil)))
+                                 (loop for b in (list '(:acceleration-structure-khr 1 (:raygen :closest-hit))
+                                                      '(:storage-image 1 (:raygen))
+                                                      '(:uniform-buffer 1 (:raygen))
+                                                      '(:storage-buffer 1 (:closest-hit))
+                                                      '(:storage-buffer 1 (:closest-hit))
+                                                      '(:storage-buffer 1 (:closest-hit))
+                                                      (list :combined-image-sampler (length textures) '(:closest-hit)))
+                                       for i from 0
+                                       collect (vk:make-descriptor-set-layout-binding
+                                                :binding i
+                                                :descriptor-type (first b)
+                                                :descriptor-count (second b)
+                                                :stage-flags (third b)))))
+                     (ray-tracing-descriptor-pool (vk:create-descriptor-pool
+                                                   device
+                                                   (vk:make-descriptor-pool-create-info
+                                                    :flags '(:free-descriptor-set)
+                                                    :max-sets (length (images swapchain-data))
+                                                    :pool-sizes (loop for b in bindings
+                                                                      collect (vk:make-descriptor-pool-size
+                                                                               :type (vk:descriptor-type b)
+                                                                               :descriptor-count (* (length (images swapchain-data))
+                                                                                                    (vk:descriptor-count b)))))))
+                     (ray-tracing-descriptor-set-layout (vk:create-descriptor-set-layout
+                                                         device
+                                                         (vk:make-descriptor-set-layout-create-info
+                                                          :bindings bindings)))
+                     (ray-tracing-descriptor-sets (vk:allocate-descriptor-sets
+                                                   device
+                                                   (vk:make-descriptor-set-allocate-info
+                                                    :descriptor-pool ray-tracing-descriptor-pool
+                                                    :set-layouts (loop for i from 0 below (length (images swapchain-data))
+                                                                       collect ray-tracing-descriptor-set-layout))))
+                     (write-descriptor-set-acceleration (vk:make-write-descriptor-set-acceleration-structure-khr
+                                                         :acceleration-structures (list (acceleration-structure top-level-acceleration-structure)))))
                 ;; use this for khr raytracing:
                 ;; https://github.com/KhronosGroup/Vulkan-Samples/blob/master/samples/extensions/raytracing_basic/raytracing_basic.cpp
                 (unwind-protect
@@ -973,7 +1041,21 @@ void main()
                                                 (list :uniform-buffer (buffer uniform-buffer-data) nil)
                                                 (list :storage-buffer (buffer material-buffer-data) nil))
                                                textures)
+                       (vk:update-descriptor-sets device
+                                                  (loop for s in ray-tracing-descriptor-sets
+                                                        collect (vk:make-write-descriptor-set
+                                                                 :next write-descriptor-set-acceleration
+                                                                 :dst-set s
+                                                                 :dst-binding 0
+                                                                 :dst-array-element 0
+                                                                 :descriptor-type (vk:descriptor-type (first bindings))))
+                                                  nil)
                        )
+                  (vk:device-wait-idle device)
+                  
+                  (vk:free-descriptor-sets device ray-tracing-descriptor-pool ray-tracing-descriptor-sets)
+                  (vk:destroy-descriptor-set-layout device ray-tracing-descriptor-set-layout)
+                  (vk:destroy-descriptor-pool device ray-tracing-descriptor-pool)
                   (clear-handle-data device top-level-acceleration-structure)
                   (clear-handle-data device bottom-level-acceleration-structure)
                   (vk:free-descriptor-sets device descriptor-pool (list descriptor-set))

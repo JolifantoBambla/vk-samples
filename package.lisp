@@ -47,6 +47,7 @@
    #:define-debug-utils-messenger-callback
    #:default-debug-utils-log-callback
    #:create-graphics-pipeline
+   #:update-descriptor-sets
    #:swapchain-data
    #:color-format
    #:images

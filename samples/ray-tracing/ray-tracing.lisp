@@ -233,7 +233,7 @@ void main()
 (defclass vertex ()
   ((pos
     :initarg :pos
-    :reader pos)
+    :accessor pos)
    (nrm
     :initarg :nrm
     :reader nrm)
@@ -339,9 +339,8 @@ void main()
      (cffi:lisp-array-to-foreign (tex-coord ,value) tex-coord '(:array :float 2))
      (setf mat-id (mat-id ,value))))
 
-(defparameter +cube-data+
-  (coerce
-   (list
+(defun make-cube-data-base ()
+  (vector
     ;;  pos                          nrm                          tex-coord             mat-id
     ;; front face
     (v! (rtg-math:v! -1.0 -1.0  1.0) (rtg-math:v!  0.0  0.0  1.0) (rtg-math:v! 0.0 0.0) 0)
@@ -384,8 +383,7 @@ void main()
     (v! (rtg-math:v!  1.0 -1.0  1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 1.0 1.0) 0)
     (v! (rtg-math:v!  1.0 -1.0  1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 1.0 1.0) 0)
     (v! (rtg-math:v! -1.0 -1.0  1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 0.0 1.0) 0)
-    (v! (rtg-math:v! -1.0 -1.0 -1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 0.0 0.0) 0))
-   'vector))
+    (v! (rtg-math:v! -1.0 -1.0 -1.0) (rtg-math:v!  0.0 -1.0  0.0) (rtg-math:v! 0.0 0.0) 0)))
 
 (defun random-in-range (min-value max-value)
   (+ (random (- max-value min-value))
@@ -395,6 +393,12 @@ void main()
   (rtg-math:v! (random-in-range min-value max-value)
                (random-in-range min-value max-value)
                (random-in-range min-value max-value)))
+
+(defun get-buffer-device-address (device buffer-data)
+  (vk:make-device-or-host-address-const-khr
+   :device-address (vk:get-buffer-device-address device
+                                                 (vk:make-buffer-device-address-info
+                                                  :buffer (buffer buffer-data)))))
 
 (defclass per-frame-data ()
   ((command-pool
@@ -413,12 +417,35 @@ void main()
     :initarg :render-complete-semaphore
     :reader render-complete-semaphore)))
 
+(defclass acceleration-structure-data ()
+  ((acceleration-structure
+    :initarg :acceleration-structure
+    :reader acceleration-structure)
+   (buffer-data
+    :initarg :buffer-data
+    :reader buffer-data)
+   (instances-buffer
+    :initarg :instances-buffer
+    :initform nil
+    :reader instances-buffer)
+   (device-address
+    :initarg :device-address
+    :reader device-address)))
+
 (defmethod clear-handle-data (device (handle-data per-frame-data))
   (vk:free-command-buffers device (command-pool handle-data) (list (command-buffer handle-data)))
   (vk:destroy-command-pool device (command-pool handle-data))
   (vk:destroy-fence device (fence handle-data))
   (vk:destroy-semaphore device (present-complete-semaphore handle-data))
   (vk:destroy-semaphore device (render-complete-semaphore handle-data)))
+
+(defmethod clear-handle-data (device (handle-data acceleration-structure-data))
+  (with-slots (acceleration-structure buffer-data instances-buffer) handle-data
+    (vk:destroy-acceleration-structure-khr device acceleration-structure)
+    (when buffer-data
+      (clear-handle-data device buffer-data))
+    (when instances-buffer
+      (clear-handle-data device instances-buffer))))
 
 (defun prepare-per-frame-data (device graphics-and-present-queue-indices)
   (loop for i from 0 below *queued-frames*
@@ -440,6 +467,175 @@ void main()
                                                                                   (vk:make-semaphore-create-info))
                                  :render-complete-semaphore (vk:create-semaphore device
                                                                                  (vk:make-semaphore-create-info))))))
+
+(defun make-bottom-level-acceleration-structure-data (physical-device
+                                                      device
+                                                      command-pool
+                                                      queue
+                                                      vertex-buffer
+                                                      index-buffer
+                                                      transform-buffer
+                                                      max-vertex-index
+                                                      primitive-count)
+  (let* ((vertex-buffer-address (get-buffer-device-address device vertex-buffer))
+         (index-buffer-address (get-buffer-device-address device index-buffer))
+         (transform-buffer-address (get-buffer-device-address device transform-buffer))
+         (acceleration-structure-geometry (vk:make-acceleration-structure-geometry-khr
+                                           :geometry-type :triangles-khr
+                                           :geometry (vk:make-acceleration-structure-geometry-data-khr
+                                                      :triangles (vk:make-acceleration-structure-geometry-triangles-data-khr
+                                                                  :vertex-format :r32g32b32-sfloat
+                                                                  :vertex-data vertex-buffer-address
+                                                                  :vertex-stride +vertex-stride+
+                                                                  :max-vertex max-vertex-index
+                                                                  :index-type :uint32
+                                                                  :index-data index-buffer-address
+                                                                  :transform-data transform-buffer-address))
+                                           :flags '(:opaque)))
+         (acceleration-structure-build-geometry-info (vk:make-acceleration-structure-build-geometry-info-khr
+                                                      :type :bottom-level-khr
+                                                      :flags '(:prefer-fast-trace)
+                                                      :mode :build-khr ;; this should be allowed to be nil
+                                                      :geometries (list acceleration-structure-geometry)
+                                                      ;; todo: this should be allowed to be nil
+                                                      :scratch-data (vk:make-device-or-host-address-const-khr
+                                                                     :device-address 0)))
+         (acceleration-structure-build-sizes-info (vk:get-acceleration-structure-build-sizes-khr device
+                                                                                                 :device-khr
+                                                                                                 acceleration-structure-build-geometry-info
+                                                                                                 (list primitive-count)))
+         (acceleration-structure-buffer (make-buffer-data physical-device
+                                                          device
+                                                          (vk:acceleration-structure-size acceleration-structure-build-sizes-info)
+                                                          '(:acceleration-structure-storage)
+                                                          :device-local))
+         (acceleration-structure (vk:create-acceleration-structure-khr device
+                                                                       (vk:make-acceleration-structure-create-info-khr
+                                                                        :buffer (buffer acceleration-structure-buffer)
+                                                                        :offset 0
+                                                                        :size (vk:acceleration-structure-size acceleration-structure-build-sizes-info)
+                                                                        :type :bottom-level-khr)))
+         (scratch-buffer-data (make-buffer-data physical-device
+                                                device
+                                                (vk:build-scratch-size acceleration-structure-build-sizes-info)
+                                                '(:storage-buffer
+                                                  :shader-device-address)
+                                                :device-local))
+         (acceleration-build-geometry (vk:make-acceleration-structure-build-geometry-info-khr
+                                       :type :bottom-level-khr
+                                       :flags '(:prefer-fast-trace)
+                                       :mode :build-khr
+                                       :dst-acceleration-structure acceleration-structure
+                                       :geometries (list acceleration-structure-geometry)
+                                       :scratch-data (get-buffer-device-address device scratch-buffer-data)))
+         (acceleration-structure-build-range-info (vk:make-acceleration-structure-build-range-info-khr
+                                                   :primitive-count primitive-count
+                                                   :primitive-offset 0
+                                                   :first-vertex 0
+                                                   :transform-offset 0)))
+    (one-time-submit device
+                     command-pool
+                     queue
+                     (lambda (command-buffer)
+                       (vk:cmd-build-acceleration-structures-khr command-buffer
+                                                                 (list acceleration-build-geometry)
+                                                                 (list (list acceleration-structure-build-range-info)))))
+    (clear-handle-data device scratch-buffer-data)
+    (make-instance 'acceleration-structure-data
+                   :acceleration-structure acceleration-structure
+                   :buffer-data acceleration-structure-buffer
+                   :device-address (vk:get-acceleration-structure-device-address-khr device
+                                                                                     (vk:make-acceleration-structure-device-address-info-khr
+                                                                                      :acceleration-structure acceleration-structure)))))
+
+(defun make-top-level-acceleration-structure-data (physical-device
+                                                   device
+                                                   command-pool
+                                                   queue
+                                                   transform
+                                                   bottom-level-acceleration-structure-data)
+  (let* ((acceleration-structure-instance (vk:make-acceleration-structure-instance-khr
+                                           :transform transform
+                                           :instance-custom-index 0
+                                           :mask #xFF
+                                           :instance-shader-binding-table-record-offset 0
+                                           :flags :triangle-facing-cull-disable
+                                           :acceleration-structure-reference (device-address bottom-level-acceleration-structure-data)))
+         (instances-buffer-data (make-buffer-data physical-device
+                                                  device
+                                                  (cffi:foreign-type-size '(:struct %vk:acceleration-structure-instance-khr))
+                                                  '(:acceleration-structure-build-input-read-only
+                                                    :shader-device-address)))
+         (instances-buffer-address (progn                             
+                                     (copy-to-device device
+                                                     (device-memory instances-buffer-data)
+                                                     acceleration-structure-instance
+                                                     '(:struct %vk:acceleration-structure-instance-khr))
+                                     (get-buffer-device-address device instances-buffer-data)))
+         (acceleration-structure-geometry (vk:make-acceleration-structure-geometry-khr
+                                           :geometry-type :instances-khr
+                                           :geometry (vk:make-acceleration-structure-geometry-data-khr
+                                                      :instances (vk:make-acceleration-structure-geometry-instances-data-khr
+                                                                  :array-of-pointers nil
+                                                                  :data instances-buffer-address))
+                                           :flags '(:opaque)))
+         (acceleration-structure-build-geometry (vk:make-acceleration-structure-build-geometry-info-khr
+                                                 :type :top-level-khr
+                                                 :flags '(:prefer-fast-trace)
+                                                 :mode :build-khr ;; this should be allowed to be nil
+                                                 :geometries (list acceleration-structure-geometry)
+                                                 ;; todo: this should be allowed to be nil
+                                                 :scratch-data (vk:make-device-or-host-address-const-khr
+                                                                :device-address 0)))
+         (primitive-count 1)
+         (acceleration-structure-build-sizes-info (vk:get-acceleration-structure-build-sizes-khr device
+                                                                                                 :device-khr
+                                                                                                 acceleration-structure-build-geometry
+                                                                                                 (list primitive-count)))
+         (acceleration-structure-buffer (make-buffer-data physical-device
+                                                          device
+                                                          (vk:acceleration-structure-size acceleration-structure-build-sizes-info)
+                                                          '(:acceleration-structure-storage)
+                                                          :device-local))
+         (acceleration-structure (vk:create-acceleration-structure-khr device
+                                                                       (vk:make-acceleration-structure-create-info-khr
+                                                                        :buffer (buffer acceleration-structure-buffer)
+                                                                        :offset 0
+                                                                        :size (vk:acceleration-structure-size acceleration-structure-build-sizes-info)
+                                                                        :type :top-level-khr)))
+         (scratch-buffer-data (make-buffer-data physical-device
+                                                device
+                                                (vk:build-scratch-size acceleration-structure-build-sizes-info)
+                                                '(:storage-buffer
+                                                  :shader-device-address)
+                                                :device-local))
+         (acceleration-build-geometry (vk:make-acceleration-structure-build-geometry-info-khr
+                                       :type :top-level-khr
+                                       :flags '(:prefer-fast-trace)
+                                       :mode :build-khr
+                                       :dst-acceleration-structure acceleration-structure
+                                       :geometries (list acceleration-structure-geometry)
+                                       :scratch-data (get-buffer-device-address device scratch-buffer-data)))
+         (acceleration-structure-build-range-info (vk:make-acceleration-structure-build-range-info-khr
+                                                   :primitive-count primitive-count
+                                                   :primitive-offset 0
+                                                   :first-vertex 0
+                                                   :transform-offset 0)))
+    (one-time-submit device
+                     command-pool
+                     queue
+                     (lambda (command-buffer)
+                       (vk:cmd-build-acceleration-structures-khr command-buffer
+                                                                 (list acceleration-build-geometry)
+                                                                 (list (list acceleration-structure-build-range-info)))))
+    (clear-handle-data device scratch-buffer-data)
+    (make-instance 'acceleration-structure-data
+                   :acceleration-structure acceleration-structure
+                   :buffer-data acceleration-structure-buffer
+                   :device-address (vk:get-acceleration-structure-device-address-khr device
+                                                                                     (vk:make-acceleration-structure-device-address-info-khr
+                                                                                      :acceleration-structure acceleration-structure))
+                   :instances-buffer instances-buffer-data)))
 
 (defun make-textures (physical-device device enable-sampler-anisotropy-p command-pool graphics-queue &optional (num-textures 10))
   (let ((textures (loop for i from 0 below num-textures
@@ -486,16 +682,19 @@ void main()
     buffer))
 
 (defun make-vertex-buffer (physical-device device command-pool queue num-materials &optional (x-max 10) (y-max 10) (z-max 10))
-  (let* ((vertices (loop for x from 0 below x-max
+  (let* ((vertices (loop with cube-data = (make-cube-data-base)
+                         for x from 0 below x-max
                          return (loop for y from 0 below y-max
                                       return (loop for z from 0 below z-max
                                                    for m = (random num-materials)
                                                    for jitter = (random-vec3 0.0 0.6)
-                                                   return (loop for v across +cube-data+
-                                                                collect (v! (rtg-math.vector3:*s
-                                                                             (rtg-math.vector3:+ (pos v)
-                                                                                                 jitter)
-                                                                             3.0)
+                                                   return (loop for v across cube-data
+                                                                collect (v! (rtg-math.vector3:+
+                                                                             (pos v)
+                                                                             (rtg-math.vector3:*s
+                                                                              (rtg-math.vector3:+ (rtg-math:v! x y z)
+                                                                                                  jitter)
+                                                                              3.0))
                                                                             (nrm v)
                                                                             (tex-coord v)
                                                                             m))))))
@@ -505,7 +704,9 @@ void main()
                                              +vertex-stride+)
                                           '(:transfer-dst
                                             :vertex-buffer
-                                            :storage-buffer)
+                                            :storage-buffer
+                                            :acceleration-structure-build-input-read-only
+                                            :shader-device-address)
                                           :device-local)))
     (copy-to-buffer vertex-buffer
                     physical-device
@@ -525,7 +726,9 @@ void main()
                                                    (cffi:foreign-type-size :uint32))
                                                 '(:transfer-dst
                                                   :index-buffer
-                                                  :storage-buffer)
+                                                  :storage-buffer
+                                                  :acceleration-structure-build-input-read-only
+                                                  :shader-device-address)
                                                 :device-local)))
     (copy-to-buffer vertex-index-buffer
                     physical-device
@@ -535,6 +738,30 @@ void main()
                     indices
                     :uint32)
     vertex-index-buffer))
+
+(defun make-transform-buffer (physical-device
+                              device
+                              command-pool
+                              queue
+                              &optional (transform (vk:make-transform-matrix-khr
+                                                    :matrix #(1.0 0.0 0.0 0.0
+                                                              0.0 1.0 0.0 0.0
+                                                              0.0 0.0 1.0 0.0))))
+  (let ((transform-buffer (make-buffer-data physical-device
+                                            device
+                                            (cffi:foreign-type-size '(:struct %vk:transform-matrix-khr))
+                                            '(:transfer-dst
+                                              :acceleration-structure-build-input-read-only
+                                              :shader-device-address)
+                                            :device-local)))
+    (copy-to-buffer transform-buffer
+                    physical-device
+                    device
+                    command-pool
+                    queue
+                    transform
+                    '(:struct %vk:transform-matrix-khr))
+    transform-buffer))
 
 (defun make-descriptor-pool (device pool-sizes)
   (let ((max-sets (reduce #'+ (map 'list #'vk:descriptor-count pool-sizes))))
@@ -568,8 +795,8 @@ void main()
                               (window-width 1280)
                               (window-height 720)
                               (x-max 10)
-                              (y-max 10)
-                              (z-max 10))
+                              (y-max 3)
+                              (z-max 1))
   (glfw:with-init-window (:title app-name
                           :width window-width
                           :height window-height
@@ -581,8 +808,12 @@ void main()
                      instance)
         (let* ((device-extensions (list vk:+khr-swapchain-extension-name+
                                         vk:+khr-ray-tracing-pipeline-extension-name+
-                                        vk:+khr-acceleration-structure-extension-name+ ;; this is not enabled in the 
-                                        vk:+khr-deferred-host-operations-extension-name+ ;; this is not enabled 
+                                        vk:+khr-acceleration-structure-extension-name+
+                                        vk:+khr-buffer-device-address-extension-name+
+                                        vk:+khr-deferred-host-operations-extension-name+
+                                        vk:+ext-descriptor-indexing-extension-name+
+                                        vk:+khr-spirv-1-4-extension-name+
+                                        vk:+khr-shader-float-controls-extension-name+
                                         vk:+khr-get-memory-requirements-2-extension-name+))
                (physical-device (or (find-if (lambda (physical-device)
                                                (supports-extensions-p physical-device
@@ -591,7 +822,10 @@ void main()
                                     (error "Could not find a device supporting all required extensions.")))
                (supported-features (vk:get-physical-device-features-2 physical-device
                                                                       (vk:make-physical-device-features-2
-                                                                       :next (vk:make-physical-device-descriptor-indexing-features))))
+                                                                       :next (vk:make-physical-device-descriptor-indexing-features
+                                                                              :next (vk:make-physical-device-buffer-device-address-features
+                                                                                     :next (vk:make-physical-device-ray-tracing-pipeline-features-khr
+                                                                                            :next (vk:make-physical-device-acceleration-structure-features-khr)))))))
                (enable-sampler-anisotropy-p (vk:sampler-anisotropy (vk:features supported-features)))
                (queue-create-infos (make-default-queue-create-infos physical-device surface))
                (graphics-and-present-queue-indices (map 'list #'vk:queue-family-index queue-create-infos))
@@ -646,7 +880,7 @@ void main()
                                               (command-pool (first per-frame-data))
                                               graphics-queue))
                      (material-buffer-data (make-materials-buffer physical-device device (length textures)))
-                     (num-vertices (* x-max y-max z-max (length +cube-data+)))
+                     (num-vertices (* x-max y-max z-max (length (make-cube-data-base))))
                      (vertex-buffer-data (make-vertex-buffer physical-device
                                                              device
                                                              (command-pool (first per-frame-data))
@@ -660,6 +894,15 @@ void main()
                                                                          (command-pool (first per-frame-data))
                                                                          graphics-queue
                                                                          num-vertices))
+                     (transform (vk:make-transform-matrix-khr
+                                 :matrix #(1.0 0.0 0.0 0.0
+                                           0.0 1.0 0.0 0.0
+                                           0.0 0.0 1.0 0.0)))
+                     (transform-buffer-data (make-transform-buffer physical-device
+                                                                   device
+                                                                   (command-pool (first per-frame-data))
+                                                                   graphics-queue
+                                                                   transform))
                      (uniform-buffer-data (make-buffer-data physical-device
                                                             device
                                                             (cffi:foreign-type-size '(:struct uniform-buffer-object))
@@ -687,15 +930,36 @@ void main()
                                                                   (list fragment-shader-module nil)
                                                                   +vertex-stride+
                                                                   (list
-                                                                   (:r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) pos))
-                                                                   (:r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) nrm))
-                                                                   (:r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) tex-coord))
-                                                                   (:r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) mat-id)))
+                                                                   (list :r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) 'pos))
+                                                                   (list :r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) 'nrm))
+                                                                   (list :r32g32-sfloat (cffi:foreign-slot-offset '(:struct vertex) 'tex-coord))
+                                                                   (list :r32-sint (cffi:foreign-slot-offset '(:struct vertex) 'mat-id)))
                                                                   :counter-clockwise
                                                                   t
                                                                   pipeline-layout
                                                                   render-pass))
-                     (transform (rtg-math.matrix4:identity)))
+                     (descriptor-set (first
+                                      (vk:allocate-descriptor-sets device
+                                                                   (vk:make-descriptor-set-allocate-info
+                                                                    :descriptor-pool descriptor-pool
+                                                                    :set-layouts (list descriptor-set-layout)))))
+                     (bottom-level-acceleration-structure (make-bottom-level-acceleration-structure-data physical-device
+                                                                                                device
+                                                                                                (command-pool (first per-frame-data))
+                                                                                                graphics-queue
+                                                                                                vertex-buffer-data
+                                                                                                vertex-index-buffer-data
+                                                                                                transform-buffer-data
+                                                                                                num-vertices
+                                                                                                (/ num-vertices 3)))
+                     (top-level-acceleration-structure (make-top-level-acceleration-structure-data physical-device
+                                                                                                   device
+                                                                                                   (command-pool (first per-frame-data))
+                                                                                                   graphics-queue
+                                                                                                   transform
+                                                                                                   bottom-level-acceleration-structure)))
+                ;; use this for khr raytracing:
+                ;; https://github.com/KhronosGroup/Vulkan-Samples/blob/master/samples/extensions/raytracing_basic/raytracing_basic.cpp
                 (unwind-protect
                      (with-framebuffers (framebuffers
                                          device
@@ -703,12 +967,23 @@ void main()
                                          (image-views swapchain-data)
                                          (image-view depth-buffer-data)
                                          window-extent)
+                       (update-descriptor-sets device
+                                               descriptor-set
+                                               (list
+                                                (list :uniform-buffer (buffer uniform-buffer-data) nil)
+                                                (list :storage-buffer (buffer material-buffer-data) nil))
+                                               textures)
                        )
+                  (clear-handle-data device top-level-acceleration-structure)
+                  (clear-handle-data device bottom-level-acceleration-structure)
+                  (vk:free-descriptor-sets device descriptor-pool (list descriptor-set))
+                  (vk:destroy-pipeline device graphics-pipeline)
                   (vk:destroy-shader-module device fragment-shader-module)
                   (vk:destroy-shader-module device vertex-shader-module)
                   (vk:destroy-pipeline-layout device pipeline-layout)
                   (vk:destroy-descriptor-set-layout device descriptor-set-layout)
                   (clear-handle-data device uniform-buffer-data)
+                  (clear-handle-data device transform-buffer-data)
                   (clear-handle-data device vertex-index-buffer-data)
                   (clear-handle-data device vertex-buffer-data)
                   (clear-handle-data device material-buffer-data)

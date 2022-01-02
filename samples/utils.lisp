@@ -913,18 +913,8 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                  front-face
                                  depth-buffered
                                  pipeline-layout
-                                 renderpass)
-  (let* ((pipeline-shader-stage-create-infos (list (vk:make-pipeline-shader-stage-create-info
-                                                    :stage :vertex
-                                                    :module (first vertex-shader-data)
-                                                    :name "main"
-                                                    :specialization-info (second vertex-shader-data))
-                                                   (vk:make-pipeline-shader-stage-create-info
-                                                    :stage :fragment
-                                                    :module (first fragment-shader-data)
-                                                    :name "main"
-                                                    :specialization-info (second fragment-shader-data))))
-         (vertex-input-attribute-descriptions (when (< 0 vertex-stride)
+                                 render-pass)
+  (let* ((vertex-input-attribute-descriptions (when (< 0 vertex-stride)
                                                 (loop for offset in vertex-input-attribute-offset
                                                       for i from 0
                                                       collect (vk:make-vertex-input-attribute-description
@@ -936,10 +926,127 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                             :binding 0
                                             :stride vertex-stride
                                             :input-rate :vertex))
-         (pipeline-vertex-input-state-create-info (when (< 0 vertex-stride)
-                                                    (vk:make-pipeline-vertex-input-state-create-info
-                                                     :vertex-binding-descriptions (list vertex-input-binding-description)
-                                                     :vertex-attribute-descriptions vertex-input-attribute-descriptions))))))
+         (stencil-op-state (vk:make-stencil-op-state
+                            :fail-op :keep
+                            :pass-op :keep
+                            :depth-fail-op :keep
+                            :compare-op :always
+                            :compare-mask 0
+                            :write-mask 0
+                            :reference 0)))
+    (first
+     (vk:create-graphics-pipelines
+      device
+      (list
+       (vk:make-graphics-pipeline-create-info
+        :stages (list (vk:make-pipeline-shader-stage-create-info
+                       :stage :vertex
+                       :module (first vertex-shader-data)
+                       :name "main"
+                       :specialization-info (second vertex-shader-data))
+                      (vk:make-pipeline-shader-stage-create-info
+                       :stage :fragment
+                       :module (first fragment-shader-data)
+                       :name "main"
+                       :specialization-info (second fragment-shader-data)))
+        :vertex-input-state (when (< 0 vertex-stride)
+                              (vk:make-pipeline-vertex-input-state-create-info
+                               :vertex-binding-descriptions (list vertex-input-binding-description)
+                               :vertex-attribute-descriptions vertex-input-attribute-descriptions))
+        :input-assembly-state (vk:make-pipeline-input-assembly-state-create-info
+                               :topology :triangle-list
+                               :primitive-restart-enable nil)
+        :viewport-state (vk:make-pipeline-viewport-state-create-info
+                         ;; we'll set both viewport and scissor state as dynamic, so these members are ignored
+                         ;; however, we'll still need to set something here for the viewportCount and scissorCount members to be set
+                         :viewports (list (vk:make-viewport))
+                         :scissors (list (vk:make-rect-2d)))
+        :rasterization-state (vk:make-pipeline-rasterization-state-create-info
+                              :depth-clamp-enable nil
+                              :rasterizer-discard-enable nil
+                              :polygon-mode :fill
+                              :cull-mode :back
+                              :front-face front-face
+                              :depth-bias-enable nil
+                              :depth-bias-constant-factor 0.0
+                              :depth-bias-clamp 0.0
+                              :depth-bias-slope-factor 0.0
+                              :line-width 1.0)
+        :multisample-state (vk:make-pipeline-multisample-state-create-info
+                            :rasterization-samples :1
+                            :min-sample-shading 0.0
+                            :sample-mask nil
+                            :sample-shading-enable nil
+                            :alpha-to-coverage-enable nil
+                            :alpha-to-one-enable nil)
+        :depth-stencil-state (vk:make-pipeline-depth-stencil-state-create-info
+                              :depth-test-enable depth-buffered
+                              :depth-write-enable depth-buffered
+                              :depth-compare-op :less-or-equal
+                              :depth-bounds-test-enable nil
+                              :stencil-test-enable nil
+                              :front stencil-op-state
+                              :back stencil-op-state
+                              :min-depth-bounds 0.0
+                              :max-depth-bounds 0.0)
+        :color-blend-state (vk:make-pipeline-color-blend-state-create-info
+                            :logic-op-enable nil
+                            :logic-op :no-op
+                            :attachments (list
+                                          (make-instance
+                                           'vk:pipeline-color-blend-attachment-state
+                                           :blend-enable nil
+                                           :src-color-blend-factor :zero
+                                           :dst-color-blend-factor :zero
+                                           :color-blend-op :add
+                                           :src-alpha-blend-factor :zero
+                                           :dst-alpha-blend-factor :zero
+                                           :alpha-blend-op :add
+                                           :color-write-mask '(:r :g :b :a)))
+                            :blend-constants  #(1.0 1.0 1.0 1.0))
+        :dynamic-state (vk:make-pipeline-dynamic-state-create-info
+                        :dynamic-states '(:viewport :scissor))
+        :layout pipeline-layout
+        :render-pass render-pass
+        :subpass 0))))))
+
+(defun update-descriptor-sets (device
+                               descriptor-set
+                               buffer-data
+                               texture-data
+                               &optional
+                                 (binding-offset 0))
+  (let* ((buffer-write-descriptor-sets
+           (loop for bd in (if (listp buffer-data) buffer-data (list buffer-data))
+                 for dst-binding from binding-offset
+                 collect (vk:make-write-descriptor-set
+                          :dst-set descriptor-set
+                          :dst-binding dst-binding
+                          :dst-array-element 0
+                          :descriptor-type (first bd)
+                          :buffer-info (list
+                                        (vk:make-descriptor-buffer-info
+                                         :buffer (second bd)
+                                         :offset 0
+                                         :range vk:+whole-size+))
+                          :texel-buffer-view (third bd))))
+         (texture-write-descriptor-sets
+           (list (vk:make-write-descriptor-set
+                  :dst-set descriptor-set
+                  :dst-binding (+ binding-offset (length buffer-write-descriptor-sets))
+                  :dst-array-element 0
+                  :descriptor-type :combined-image-sampler
+                  :image-info (loop for td in (if (listp texture-data) texture-data (list texture-data))
+                                    collect (vk:make-descriptor-image-info
+                                             :sampler (sampler td)
+                                             :image-view (image-view (image-data td))
+                                             :image-layout :shader-read-only-optimal)))))
+         (write-descriptor-sets (concatenate 'list
+                                             buffer-write-descriptor-sets
+                                             texture-write-descriptor-sets)))
+    (vk:update-descriptor-sets device
+                               write-descriptor-sets
+                               nil)))
 
 (defclass swapchain-data ()
   ((color-format
@@ -1085,9 +1192,10 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                                                                          :base-array-layer 0
                                                                                          :layer-count 1)))))))
 
-(defun allocate-device-memory (device physical-device memory-requirements memory-property-flags)
+(defun allocate-device-memory (device physical-device memory-requirements memory-property-flags &optional (next nil))
   (vk:allocate-memory device
                       (vk:make-memory-allocate-info
+                       :next next
                        :allocation-size (vk:size memory-requirements)
                        :memory-type-index (find-type-index physical-device memory-requirements memory-property-flags))))
 
@@ -1153,10 +1261,14 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                     :size size
                                     :usage usage
                                     :sharing-mode :exclusive)))
+         (device-memory-next (when (member :shader-device-address (if (listp usage) usage (list usage)))
+                               (vk:make-memory-allocate-flags-info
+                                :flags '(:device-address))))
          (device-memory (allocate-device-memory device
                                                 physical-device
                                                 (vk:get-buffer-memory-requirements device buffer)
-                                                property-flags)))
+                                                property-flags
+                                                device-memory-next)))
     (vk:bind-buffer-memory device buffer device-memory 0)
     (make-instance 'buffer-data
                    :buffer buffer
@@ -1169,8 +1281,12 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                        queue
                        data
                        data-type)
-  (let* ((data-size (* (cffi:foreign-type-size data-type)
-                       (length data)))
+  (let* ((data-count (cond
+                       ((listp data) (length data))
+                       ((arrayp data) (array-total-size data))
+                       (t 1)))
+         (data-size (* (cffi:foreign-type-size data-type)
+                       data-count))
          (staging-buffer (make-buffer-data physical-device
                                            device
                                            data-size

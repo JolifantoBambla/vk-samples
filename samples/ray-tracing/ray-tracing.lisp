@@ -75,10 +75,10 @@ void main()
 
 (defparameter *raygen-shader*
   "#version 460
-#extension GL_NV_ray_tracing : require
-layout(binding = 0, set = 0) uniform accelerationStructureNV topLevelAS;
+#extension GL_EXT_ray_tracing : require
+layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba8) uniform image2D image;
-layout(binding=2, set = 0) uniform UniformBufferObject
+layout(binding = 2, set = 0) uniform UniformBufferObject
 {
   mat4 model;
   mat4 view;
@@ -87,27 +87,27 @@ layout(binding=2, set = 0) uniform UniformBufferObject
   mat4 viewInverse;
   mat4 projInverse;
 } cam;
-layout(location = 0) rayPayloadNV vec3 hitValue;
+layout(location = 0) rayPayloadEXT vec3 hitValue;
 void main() 
 {
-  const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
-  const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeNV.xy);
+  const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+  const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeEXT.xy);
   vec2 d = inUV * 2.0 - 1.0;
   vec4 origin = cam.viewInverse*vec4(0,0,0,1);
   vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1) ;
   vec4 direction = cam.viewInverse*vec4(normalize(target.xyz), 0) ;
-  uint rayFlags = gl_RayFlagsOpaqueNV;
+  uint rayFlags = gl_RayFlagsOpaqueEXT;
   uint cullMask = 0xff;
   float tmin = 0.001;
   float tmax = 10000.0;
-  traceNV(topLevelAS, rayFlags, cullMask, 0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/, origin.xyz, tmin, direction.xyz, tmax, 0 /*payload*/);
-  imageStore(image, ivec2(gl_LaunchIDNV.xy), vec4(hitValue, 0.0));
+  traceRayEXT(topLevelAS, rayFlags, cullMask, 0 /*sbtRecordOffset*/, 0 /*sbtRecordStride*/, 0 /*missIndex*/, origin.xyz, tmin, direction.xyz, tmax, 0 /*payload*/);
+  imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 0.0));
 }")
 
 (defparameter *miss-shader*
   "#version 460
-#extension GL_NV_ray_tracing : require
-layout(location = 0) rayPayloadInNV vec3 hitValue;
+#extension GL_EXT_ray_tracing : require
+layout(location = 0) rayPayloadInEXT vec3 hitValue;
 void main()
 {
   hitValue = vec3(0.0, 0.1, 0.3);
@@ -115,8 +115,8 @@ void main()
 
 (defparameter *shadow-miss-shader*
   "#version 460
-#extension GL_NV_ray_tracing : require
-layout(location = 2) rayPayloadInNV bool isShadowed;
+#extension GL_EXT_ray_tracing : require
+layout(location = 2) rayPayloadInEXT bool isShadowed;
 void main()
 {
   isShadowed = false;
@@ -124,12 +124,12 @@ void main()
 
 (defparameter *closest-hit-shader*
   "#version 460
-#extension GL_NV_ray_tracing : require
+#extension GL_EXT_ray_tracing : require
 #extension GL_EXT_nonuniform_qualifier : enable
-layout(location = 0) rayPayloadInNV vec3 hitValue;
-layout(location = 2) rayPayloadNV bool isShadowed;
-hitAttributeNV vec3 attribs;
-layout(binding = 0, set = 0) uniform accelerationStructureNV topLevelAS;
+layout(location = 0) rayPayloadInEXT vec3 hitValue;
+layout(location = 2) rayPayloadEXT bool isShadowed;
+hitAttributeEXT vec3 attribs;
+layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 3, set = 0) buffer Vertices { vec4 v[]; } vertices;
 layout(binding = 4, set = 0) buffer Indices { uint i[]; } indices;
 layout(binding = 5, set = 0) buffer MatColorBufferObject { vec4[] m; } materials;
@@ -181,7 +181,7 @@ void main()
   vec3 lightVector = normalize(vec3(5, 4, 3));
   float dot_product = max(dot(lightVector, normal), 0.2);
   Material mat = unpackMaterial(v1.matIndex);
-  vec3 c = dot_product * mat.diffuse; 
+  vec3 c = dot_product * mat.diffuse;
   if (0 <= mat.textureID)
   {
     vec2 texCoord = v0.texCoord * barycentrics.x + v1.texCoord * barycentrics.y + v2.texCoord * barycentrics.z;
@@ -189,9 +189,9 @@ void main()
   }
   float tmin = 0.001;
   float tmax = 100.0;
-  vec3 origin = gl_WorldRayOriginNV + gl_WorldRayDirectionNV * gl_HitTNV;
+  vec3 origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
   isShadowed = true;
-  traceNV(topLevelAS, gl_RayFlagsTerminateOnFirstHitNV|gl_RayFlagsOpaqueNV|gl_RayFlagsSkipClosestHitShaderNV,  0xFF, 1 /* sbtRecordOffset */, 0 /* sbtRecordStride */, 1 /* missIndex */, origin,
+  traceRayEXT(topLevelAS, gl_RayFlagsTerminateOnFirstHitEXT|gl_RayFlagsOpaqueEXT|gl_RayFlagsSkipClosestHitShaderEXT,  0xFF, 1 /* sbtRecordOffset */, 0 /* sbtRecordStride */, 1 /* missIndex */, origin,
           tmin, lightVector, tmax, 2 /*payload location*/);
   hitValue = c;
   if (isShadowed)
@@ -1025,7 +1025,59 @@ void main()
                                                     :set-layouts (loop for i from 0 below (length (images swapchain-data))
                                                                        collect ray-tracing-descriptor-set-layout))))
                      (write-descriptor-set-acceleration (vk:make-write-descriptor-set-acceleration-structure-khr
-                                                         :acceleration-structures (list (acceleration-structure top-level-acceleration-structure)))))
+                                                         :acceleration-structures (list (acceleration-structure top-level-acceleration-structure))))
+                     (ray-tracing-shader-compile-opts (make-instance 'shaderc:compile-options-set
+                                                                     :target-spirv :spv-1-4))
+                     (raygen-shader-module (vk:create-shader-module device
+                                                                    (vk:make-shader-module-create-info
+                                                                     :code (shaderc:compile-to-spv *raygen-shader*
+                                                                                                   :raygen-shader
+                                                                                                   :options ray-tracing-shader-compile-opts))))
+                     (miss-shader-module (vk:create-shader-module device
+                                                                  (vk:make-shader-module-create-info
+                                                                   :code (shaderc:compile-to-spv *miss-shader*
+                                                                                                 :miss-shader
+                                                                                                 :options ray-tracing-shader-compile-opts))))
+                     (shadow-miss-shader-module (vk:create-shader-module device
+                                                                         (vk:make-shader-module-create-info
+                                                                          :code (shaderc:compile-to-spv *shadow-miss-shader*
+                                                                                                        :miss-shader
+                                                                                                        :options ray-tracing-shader-compile-opts))))
+                     (closest-hit-shader-module (vk:create-shader-module device
+                                                                         (vk:make-shader-module-create-info
+                                                                          :code (shaderc:compile-to-spv *closest-hit-shader*
+                                                                                                        :closesthit-shader
+                                                                                                        :options ray-tracing-shader-compile-opts))))
+                     (shader-stages (loop for s in (list
+                                                    (list :raygen raygen-shader-module)
+                                                    (list :miss miss-shader-module)
+                                                    (list :miss shadow-miss-shader-module)
+                                                    (list :closest-hit closest-hit-shader-module))
+                                          collect (vk:make-pipeline-shader-stage-create-info
+                                                   :stage (first s)
+                                                   :module (second s)
+                                                   :name "main")))
+                     (shader-groups (loop for g in (list
+                                                    (list :general-khr 0 vk:+shader-unused-khr+)
+                                                    (list :general-khr 1 vk:+shader-unused-khr+)
+                                                    (list :general-khr 2 vk:+shader-unused-khr+)
+                                                    (list :triangles-hit-group-khr vk:+shader-unused-khr+ 3)
+                                                    (list :triangles-hit-group-khr vk:+shader-unused-khr+ vk:+shader-unused-khr+))
+                                          collect (vk:make-ray-tracing-shader-group-create-info-khr
+                                                   :type (first g)
+                                                   :general-shader (second g)
+                                                   :closest-hit-shader (third g)
+                                                   :any-hit-shader vk:+shader-unused-khr+
+                                                   :intersection-shader vk:+shader-unused-khr+)))
+                     (ray-tracing-pipeline-layout (vk:create-pipeline-layout device
+                                                                             (vk:make-pipeline-layout-create-info
+                                                                              :set-layouts (list ray-tracing-descriptor-set-layout))))
+                     (ray-tracing-pipeline (first (vk:create-ray-tracing-pipelines-khr device
+                                                                                       (list (vk:make-ray-tracing-pipeline-create-info-khr
+                                                                                              :stages shader-stages
+                                                                                              :groups shader-groups
+                                                                                              :max-pipeline-ray-recursion-depth 2
+                                                                                              :layout ray-tracing-pipeline-layout))))))
                 ;; use this for khr raytracing:
                 ;; https://github.com/KhronosGroup/Vulkan-Samples/blob/master/samples/extensions/raytracing_basic/raytracing_basic.cpp
                 (unwind-protect
@@ -1050,9 +1102,30 @@ void main()
                                                                  :dst-array-element 0
                                                                  :descriptor-type (vk:descriptor-type (first bindings))))
                                                   nil)
+                       (loop for s in ray-tracing-descriptor-sets do
+                             (update-descriptor-sets device
+                                                     s
+                                                     (list
+                                                      (list (vk:descriptor-type (third bindings)) (buffer uniform-buffer-data) nil)
+                                                      (list (vk:descriptor-type (fourth bindings)) (buffer vertex-buffer-data) nil)
+                                                      (list (vk:descriptor-type (fifth bindings)) (buffer vertex-index-buffer-data) nil)
+                                                      (list (vk:descriptor-type (sixth bindings)) (buffer material-buffer-data) nil))
+                                                     textures
+                                                     2))
+                       (vk:next (vk:get-physical-device-properties-2 physical-device
+                                                                     (vk:make-physical-device-properties-2
+                                                                      :next (vk:make-physical-device-ray-tracing-pipeline-properties-khr)
+                                                                      ;; todo: this should not have to be explicitly set
+                                                                      :properties (vk:get-physical-device-properties physical-device))))
                        )
                   (vk:device-wait-idle device)
                   
+                  (vk:destroy-pipeline device ray-tracing-pipeline)
+                  (vk:destroy-pipeline-layout device ray-tracing-pipeline-layout)
+                  (vk:destroy-shader-module device closest-hit-shader-module)
+                  (vk:destroy-shader-module device shadow-miss-shader-module)
+                  (vk:destroy-shader-module device miss-shader-module)
+                  (vk:destroy-shader-module device raygen-shader-module)
                   (vk:free-descriptor-sets device ray-tracing-descriptor-pool ray-tracing-descriptor-sets)
                   (vk:destroy-descriptor-set-layout device ray-tracing-descriptor-set-layout)
                   (vk:destroy-descriptor-pool device ray-tracing-descriptor-pool)

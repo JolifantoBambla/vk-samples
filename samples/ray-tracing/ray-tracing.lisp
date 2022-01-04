@@ -97,9 +97,9 @@ void main()
   const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
   const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeEXT.xy);
   vec2 d = inUV * 2.0 - 1.0;
-  vec4 origin = cam.viewInverse*vec4(0,0,0,1);
+  vec4 origin = cam.viewInverse * vec4(0,0,0,1);
   vec4 target = cam.projInverse * vec4(d.x, d.y, 1, 1) ;
-  vec4 direction = cam.viewInverse*vec4(normalize(target.xyz), 0) ;
+  vec4 direction = cam.viewInverse * vec4(normalize(target.xyz), 0) ;
   uint rayFlags = gl_RayFlagsOpaqueEXT;
   uint cullMask = 0xff;
   float tmin = 0.001;
@@ -114,7 +114,7 @@ void main()
 layout(location = 0) rayPayloadInEXT vec3 hitValue;
 void main()
 {
-  hitValue = vec3(0.0, 0.1, 0.3);
+  hitValue = gl_WorldRayDirectionEXT;//vec3(0.0, 0.1, 0.3);
 }")
 
 (defparameter *shadow-miss-shader*
@@ -249,6 +249,64 @@ void main()
   (setf (center-position cam) center-pos)
   (setf (up-vector cam) up)
   (update cam))
+
+(defun orbit (cam delta invert)
+  (unless (and (close-to-zerop (aref delta 0))
+               (close-to-zerop (aref delta 1)))
+    (with-slots (camera-position center-position up-vector) cam
+      (let* ((dx (* (aref delta 0) (* 2 rtg-math:+pi+)))
+             (dy (* (aref delta 1) (* 2 rtg-math:+pi+)))
+             (origin (if invert camera-position center-position))
+             (position (if invert center-position camera-position))
+             (center-to-eye (rtg-math.vector3:- position origin))
+             (radius (rtg-math.vector3:length center-to-eye))
+             (z-axis (rtg-math.vector3:normalize center-to-eye))
+             (y-rotation (rtg-math.matrix4:rotation-from-axis-angle up-vector (- dx)))
+             (center-to-eye (rtg-math.matrix4:*v3 y-rotation z-axis))
+             (x-axis (rtg-math.vector3:normalize (rtg-math.vector3:cross up-vector z-axis)))
+             (x-rotation (rtg-math.matrix4:rotation-from-axis-angle x-axis (- dy)))
+             (rotated-vector (rtg-math.matrix4:*v3 x-rotation center-to-eye)))
+        (when (= (signum (aref rotated-vector 0))
+                 (signum (aref center-to-eye 0)))
+          (setf center-to-eye rotated-vector))
+        (setf center-to-eye (rtg-math.vector3:*s center-to-eye radius))
+        (let ((new-pos (rtg-math.vector3:+ center-to-eye origin)))
+          (if invert
+              (setf center-position new-pos)
+              (setf camera-position new-pos)))))))
+
+(defun dolly (cam delta))
+(defun pan (cam delta))
+(defun trackball (cam position))
+
+(defun motion (cam position action)
+  (with-slots (mouse-position window-size mode) cam
+    (let ((delta (rtg-math:v! (float (/ (- (aref position 0) (aref mouse-position 0))
+                                        (aref window-size 0)))
+                              (float (/ (- (aref position 1) (aref mouse-position 1))
+                                        (aref window-size 1))))))
+      (cond
+        ((eq :orbit action)
+         (orbit cam delta (eq :trackball mode)))
+        ((eq :dolly action)
+         (dolly cam delta))
+        ((eq :pan action)
+         (pan cam delta))
+        ((eq :look-around action)
+         (if (eq :trackball mode)
+             (trackball cam position)
+             (orbit cam (rtg-math:v! (aref 0 delta) (- (aref 1 delta))) t))))
+      (update cam)
+      (setf mouse-position position))))
+
+(defun mouse-move (cam position mouse-button modifiers)
+  (let ((current-action (cond
+                          ((eq :left mouse-button)
+                           :orbit)
+                          ((eq :right mouse-button)
+                           :orbit)
+                          (t :orbit))))
+    (motion cam position current-action)))
 
 (defmethod initialize-instance :after ((cam camera-manipulator) &key)
   (update cam))
@@ -899,10 +957,11 @@ void main()
       (let ((mouse-button (cond
                             ((eq :press (glfw:get-mouse-button :left window)) :left)
                             ((eq :press (glfw:get-mouse-button :right window)) :right)
-                            (t nil))))
+                            (t nil)))
+            (modifiers nil))
         (when mouse-button
-          ;; todo: implement mouse-move (cam)
-          (setf (mouse-position camera-manipulator) (rtg-math:v!int x y)))))
+          ;; todo: modifiers
+          (mouse-move camera-manipulator (rtg-math:v!int (floor x) (floor y)) mouse-button modifiers))))
     (glfw:def-framebuffer-size-callback framebuffer-resize-callback (window w h)
       (declare (ignore window))
       (setf (window-size camera-manipulator) (rtg-math:v!int w h)))
@@ -1227,37 +1286,6 @@ void main()
                                                                                    handle-size
                                                                                    handle-size-aligned
                                                                                    '(3 4)))
-                       ;; remove sbt stuff below
-                       (shader-binding-table-usage-flags '(:shader-binding-table :transfer-src :shader-device-address))
-                       (shader-handle-storage (cffi:with-foreign-object (stb-ptr :uint8 shader-binding-table-size)
-                                                (vk:get-ray-tracing-shader-group-handles-khr device
-                                                                                             ray-tracing-pipeline
-                                                                                             0 ;; first group
-                                                                                             group-count
-                                                                                             shader-binding-table-size
-                                                                                             stb-ptr)
-                                                (loop for i from 0 below shader-binding-table-size
-                                                      collect (cffi:mem-aref stb-ptr :uint8 i))))
-                       (raygen-shader-binding-offset 0)
-                       (raygen-shader-table-size (vk:shader-group-handle-size ray-tracing-pipeline-properties))
-                       (miss-shader-binding-offset (+ raygen-shader-binding-offset (round-up raygen-shader-table-size
-                                                                                             (vk:shader-group-base-alignment ray-tracing-pipeline-properties))))
-                       (miss-shader-binding-stride (vk:shader-group-handle-size ray-tracing-pipeline-properties))
-                       (miss-shader-table-size (* 2 miss-shader-binding-stride))
-                       (hit-shader-binding-offset (+ miss-shader-binding-offset (round-up miss-shader-table-size
-                                                                                          (vk:shader-group-base-alignment ray-tracing-pipeline-properties))))
-                       (hit-shader-binding-stride (vk:shader-group-handle-size ray-tracing-pipeline-properties))
-                       (hit-shader-table-size (* 2 hit-shader-binding-stride))
-                       (shader-binding-table-size (+ hit-shader-binding-offset hit-shader-table-size))
-                       (shader-binding-table-buffer-data (let ((buffer (make-buffer-data physical-device
-                                                                                         device
-                                                                                         shader-binding-table-size
-                                                                                         '(:transfer-dst))))
-                                                           (copy-to-device device
-                                                                           (device-memory buffer)
-                                                                           shader-handle-storage
-                                                                           :uint8)
-                                                           buffer))
                        (clear-values (list
                                       (vk:make-clear-value
                                        :color (vk:make-clear-color-value
@@ -1469,7 +1497,6 @@ void main()
                     (clear-handle-data device raygen-shader-binding-table)
                     (clear-handle-data device miss-shader-binding-table)
                     (clear-handle-data device hit-shader-binding-table)
-                    (clear-handle-data device shader-binding-table-buffer-data)
                     (vk:destroy-pipeline device ray-tracing-pipeline)
                     (vk:destroy-pipeline-layout device ray-tracing-pipeline-layout)
                     (vk:destroy-shader-module device closest-hit-shader-module)

@@ -2,7 +2,11 @@
 
 (in-package #:vk-samples/ray-tracing)
 
+(defparameter +uint64-max+ 18446744073709551615)
+
 (defparameter *queued-frames* 2)
+
+(defparameter +fence-timeout+ 100000000)
 
 (defparameter *vertex-shader*
   "#version 450
@@ -200,25 +204,74 @@ void main()
   }
 }")
 
+(defclass camera-manipulator ()
+  ((camera-position
+    :initform (rtg-math:v! 10.0 10.0 10.0)
+    :accessor camera-position)
+   (center-position
+    :initform (rtg-math:v! 0.0 0.0 0.0)
+    :accessor center-position)
+   (up-vector
+    :initform (rtg-math:v! 0.0 1.0 0.0)
+    :accessor up-vector)
+   (roll
+    :initform 0
+    :accessor roll)
+   (matrix
+    :initform (rtg-math.matrix4:identity)
+    :accessor matrix)
+   (window-size
+    :initform (rtg-math:v!int 1 1)
+    :accessor window-size)
+   (movement-speed
+    :initform 30.0
+    :accessor movement-speed)
+   (mouse-position
+    :initform (rtg-math:v!int 0 0)
+    :accessor mouse-position)
+   (mode
+    :initform :examine
+    :accessor mode)))
+
+(defun close-to-zerop (num)
+  (< (abs num) short-float-epsilon))
+
+(defun update (cam)
+  (setf (matrix cam) (rtg-math.matrix4:look-at (up-vector cam)
+                                               (camera-position cam)
+                                               (center-position cam)))
+  (unless (close-to-zerop (roll cam))
+    (setf (matrix cam)
+          (rtg-math.matrix4:* (matrix cam) (rtg-math.matrix4:rotation-from-axis-angle (rtg-math:v! 0 0 1) (roll cam))))))
+
+(defun set-look-at (cam cam-pos center-pos up)
+  (setf (camera-position cam) cam-pos)
+  (setf (center-position cam) center-pos)
+  (setf (up-vector cam) up)
+  (update cam))
+
+(defmethod initialize-instance :after ((cam camera-manipulator) &key)
+  (update cam))
+
 (defclass uniform-buffer-object ()
   ((model
     :initarg :model
-    :reader model)
+    :accessor model)
    (view
     :initarg :view
-    :reader view)
+    :accessor view)
    (proj
     :initarg :proj
-    :reader proj)
+    :accessor proj)
    (model-i-t
     :initarg :model-i-t
-    :reader model-i-t)
+    :accessor model-i-t)
    (view-inverse
     :initarg :view-inverse
-    :reader view-inverse)
+    :accessor view-inverse)
    (proj-inverse
     :initarg :proj-inverse
-    :reader proj-inverse)))
+    :accessor proj-inverse)))
 
 (defclass material ()
   ((diffuse
@@ -260,6 +313,9 @@ void main()
                      num-ints)
                   15)
                16))))
+
+(defun round-up (value alignment)
+  (* alignment (floor (/ (+ value (1- alignment)) alignment))))
 
 (defconstant +material-stride+
   (stride 3 1))
@@ -339,7 +395,7 @@ void main()
      (cffi:lisp-array-to-foreign (tex-coord ,value) tex-coord '(:array :float 2))
      (setf mat-id (mat-id ,value))))
 
-(defun make-cube-data-base ()
+(defparameter +cube-data+
   (vector
     ;;  pos                          nrm                          tex-coord             mat-id
     ;; front face
@@ -682,22 +738,21 @@ void main()
     buffer))
 
 (defun make-vertex-buffer (physical-device device command-pool queue num-materials &optional (x-max 10) (y-max 10) (z-max 10))
-  (let* ((vertices (loop with cube-data = (make-cube-data-base)
-                         for x from 0 below x-max
-                         return (loop for y from 0 below y-max
-                                      return (loop for z from 0 below z-max
-                                                   for m = (random num-materials)
-                                                   for jitter = (random-vec3 0.0 0.6)
-                                                   return (loop for v across cube-data
-                                                                collect (v! (rtg-math.vector3:+
-                                                                             (pos v)
-                                                                             (rtg-math.vector3:*s
-                                                                              (rtg-math.vector3:+ (rtg-math:v! x y z)
-                                                                                                  jitter)
-                                                                              3.0))
-                                                                            (nrm v)
-                                                                            (tex-coord v)
-                                                                            m))))))
+  (let* ((vertices (loop for x from 0 below x-max appending
+                         (loop for y from 0 below y-max appending
+                               (loop for z from 0 below z-max
+                                     for m = (random num-materials)
+                                     for jitter = (random-vec3 0.0 0.6)
+                                     appending (loop for v across +cube-data+
+                                                     collect (v! (rtg-math.vector3:+
+                                                                  (pos v)
+                                                                  (rtg-math.vector3:*s
+                                                                   (rtg-math.vector3:+ (rtg-math:v! x y z)
+                                                                                       jitter)
+                                                                   3.0))
+                                                                 (nrm v)
+                                                                 (tex-coord v)
+                                                                 m))))))
          (vertex-buffer (make-buffer-data physical-device
                                           device
                                           (* (length vertices)
@@ -763,6 +818,31 @@ void main()
                     '(:struct %vk:transform-matrix-khr))
     transform-buffer))
 
+(defun make-shader-binding-table-buffer (physical-device
+                                         device
+                                         ray-tracing-pipeline
+                                         shader-binding-table-size
+                                         group-count
+                                         handle-size
+                                         handle-size-aligned
+                                         indices)
+  (let ((buffer (make-buffer-data physical-device
+                                  device
+                                  handle-size-aligned
+                                  '(:shader-binding-table :transfer-src :shader-device-address))))
+    (cffi:with-foreign-object (sbt-ptr :uint8 shader-binding-table-size)
+      (vk:get-ray-tracing-shader-group-handles-khr device
+                                                   ray-tracing-pipeline
+                                                   0 ;; first group
+                                                   group-count
+                                                   shader-binding-table-size
+                                                   sbt-ptr)
+      (with-mapped-memory (p-mapped device (device-memory buffer) 0 (* (length indices) handle-size-aligned))
+        (loop for index in indices
+              for ptr = (cffi:mem-aref p-mapped :pointer) then (cffi:inc-pointer ptr handle-size-aligned)
+              do (vk-utils:memcpy ptr (cffi:inc-pointer sbt-ptr (* index handle-size)) handle-size))))
+    buffer))
+
 (defun make-descriptor-pool (device pool-sizes)
   (let ((max-sets (reduce #'+ (map 'list #'vk:descriptor-count pool-sizes))))
     (vk:create-descriptor-pool device
@@ -795,358 +875,628 @@ void main()
                               (window-width 1280)
                               (window-height 720)
                               (x-max 10)
-                              (y-max 3)
-                              (z-max 1))
-  (glfw:with-init-window (:title app-name
-                          :width window-width
-                          :height window-height
-                          :client-api :no-api)
-    (with-instance (instance
-                    :app-name app-name
-                    :window-extensions t)
-      (with-surface (surface
-                     instance)
-        (let* ((device-extensions (list vk:+khr-swapchain-extension-name+
-                                        vk:+khr-ray-tracing-pipeline-extension-name+
-                                        vk:+khr-acceleration-structure-extension-name+
-                                        vk:+khr-buffer-device-address-extension-name+
-                                        vk:+khr-deferred-host-operations-extension-name+
-                                        vk:+ext-descriptor-indexing-extension-name+
-                                        vk:+khr-spirv-1-4-extension-name+
-                                        vk:+khr-shader-float-controls-extension-name+
-                                        vk:+khr-get-memory-requirements-2-extension-name+))
-               (physical-device (or (find-if (lambda (physical-device)
-                                               (supports-extensions-p physical-device
-                                                                      device-extensions))
-                                             (vk:enumerate-physical-devices instance))
-                                    (error "Could not find a device supporting all required extensions.")))
-               (supported-features (vk:get-physical-device-features-2 physical-device
-                                                                      (vk:make-physical-device-features-2
-                                                                       :next (vk:make-physical-device-descriptor-indexing-features
-                                                                              :next (vk:make-physical-device-buffer-device-address-features
-                                                                                     :next (vk:make-physical-device-ray-tracing-pipeline-features-khr
-                                                                                            :next (vk:make-physical-device-acceleration-structure-features-khr)))))))
-               (enable-sampler-anisotropy-p (vk:sampler-anisotropy (vk:features supported-features)))
-               (queue-create-infos (make-default-queue-create-infos physical-device surface))
-               (graphics-and-present-queue-indices (map 'list #'vk:queue-family-index queue-create-infos))
-               (graphics-queue-index (first graphics-and-present-queue-indices))
-               (present-queue-index (or (second graphics-and-present-queue-indices)
-                                        (first graphics-and-present-queue-indices))))
-          (vk-utils:with-device (device
-                                 physical-device
-                                 (vk:make-device-create-info
-                                  :next (vk:next supported-features)
-                                  :queue-create-infos queue-create-infos
-                                  :enabled-extension-names device-extensions
-                                  :enabled-features (vk:features supported-features)))
-            (let ((vk:*default-extension-loader* (vk:make-extension-loader :instance instance
-                                                                           :device device)))
-              (let* ((window-extent (vk:make-extent-2d
-                                     :width window-width
-                                     :height window-height))
-                     (per-frame-data (prepare-per-frame-data device graphics-and-present-queue-indices))
-                     (graphics-queue (vk:get-device-queue device graphics-queue-index 0))
-                     (present-queue (vk:get-device-queue device present-queue-index 0))
-                     (descriptor-pool (make-descriptor-pool device
-                                                            (list (vk:make-descriptor-pool-size
-                                                                   :type :combined-image-sampler
-                                                                   :descriptor-count 1000)
-                                                                  (vk:make-descriptor-pool-size
-                                                                   :type :uniform-buffer
-                                                                   :descriptor-count 1000)
-                                                                  (vk:make-descriptor-pool-size
-                                                                   :type :storage-buffer
-                                                                   :descriptor-count 1000))))
-                     (swapchain-data (make-swapchain-data physical-device
-                                                          device
-                                                          surface
-                                                          window-extent
-                                                          '(:color-attachment :storage)
-                                                          nil
-                                                          graphics-queue-index
-                                                          present-queue-index))
-                     (color-format (color-format swapchain-data))
-                     (depth-format (pick-depth-format physical-device))
-                     (render-pass (create-render-pass device
-                                                      color-format
-                                                      depth-format))
-                     (depth-buffer-data (make-depth-buffer-data physical-device
-                                                                device
-                                                                depth-format
-                                                                window-extent))
-                     (textures (make-textures physical-device
-                                              device
-                                              enable-sampler-anisotropy-p
-                                              (command-pool (first per-frame-data))
-                                              graphics-queue))
-                     (material-buffer-data (make-materials-buffer physical-device device (length textures)))
-                     (num-vertices (* x-max y-max z-max (length (make-cube-data-base))))
-                     (vertex-buffer-data (make-vertex-buffer physical-device
-                                                             device
-                                                             (command-pool (first per-frame-data))
-                                                             graphics-queue
-                                                             (length textures)
-                                                             x-max
-                                                             y-max
-                                                             z-max))
-                     (vertex-index-buffer-data (make-vertex-index-buffer physical-device
-                                                                         device
-                                                                         (command-pool (first per-frame-data))
-                                                                         graphics-queue
-                                                                         num-vertices))
-                     (transform (vk:make-transform-matrix-khr
-                                 :matrix #(1.0 0.0 0.0 0.0
-                                           0.0 1.0 0.0 0.0
-                                           0.0 0.0 1.0 0.0)))
-                     (transform-buffer-data (make-transform-buffer physical-device
-                                                                   device
-                                                                   (command-pool (first per-frame-data))
-                                                                   graphics-queue
-                                                                   transform))
-                     (uniform-buffer-data (make-buffer-data physical-device
+                              (y-max 10)
+                              (z-max 10))
+  (let ((use-raster-render nil)
+        (camera-manipulator (make-instance 'camera-manipulator)))
+    (setf (window-size camera-manipulator) (rtg-math:v!int window-width window-height))
+    (let ((diagonal (rtg-math.vector3:*s (rtg-math:v! x-max y-max z-max)
+                                         3.0)))
+      (set-look-at camera-manipulator
+                   (rtg-math.vector3:*s diagonal 1.5)
+                   (rtg-math.vector3:*s diagonal 0.5)
+                   (rtg-math:v! 0 1 0)))
+
+    (glfw:def-key-callback key-callback (window key scancode action mod-keys)
+      (declare (ignore window scancode mod-keys))
+      (when (eq action :press)
+        (cond
+          ((member key '(:escape :q))
+           (glfw:set-window-should-close))
+          ((eq key :r)
+           (setf use-raster-render (not use-raster-render))))))
+    (glfw:def-cursor-pos-callback cursor-pos-callback (window x y)
+      (let ((mouse-button (cond
+                            ((eq :press (glfw:get-mouse-button :left window)) :left)
+                            ((eq :press (glfw:get-mouse-button :right window)) :right)
+                            (t nil))))
+        (when mouse-button
+          ;; todo: implement mouse-move (cam)
+          (setf (mouse-position camera-manipulator) (rtg-math:v!int x y)))))
+    (glfw:def-framebuffer-size-callback framebuffer-resize-callback (window w h)
+      (declare (ignore window))
+      (setf (window-size camera-manipulator) (rtg-math:v!int w h)))
+    
+    (glfw:with-init-window (:title app-name
+                            :width window-width
+                            :height window-height
+                            :client-api :no-api)
+      
+      (glfw:set-key-callback 'key-callback)
+      (glfw:set-cursor-position-callback 'cursor-pos-callback)
+      
+      (with-instance (instance
+                      :app-name app-name
+                      :window-extensions t)
+        (with-surface (surface
+                       instance)
+          (let* ((device-extensions (list vk:+khr-swapchain-extension-name+
+                                          vk:+khr-ray-tracing-pipeline-extension-name+
+                                          vk:+khr-acceleration-structure-extension-name+
+                                          vk:+khr-buffer-device-address-extension-name+
+                                          vk:+khr-deferred-host-operations-extension-name+
+                                          vk:+ext-descriptor-indexing-extension-name+
+                                          vk:+khr-spirv-1-4-extension-name+
+                                          vk:+khr-shader-float-controls-extension-name+
+                                          vk:+khr-get-memory-requirements-2-extension-name+))
+                 (physical-device (or (find-if (lambda (physical-device)
+                                                 (supports-extensions-p physical-device
+                                                                        device-extensions))
+                                               (vk:enumerate-physical-devices instance))
+                                      (error "Could not find a device supporting all required extensions.")))
+                 (supported-features (vk:get-physical-device-features-2 physical-device
+                                                                        (vk:make-physical-device-features-2
+                                                                         :next (vk:make-physical-device-descriptor-indexing-features
+                                                                                :next (vk:make-physical-device-buffer-device-address-features
+                                                                                       :next (vk:make-physical-device-ray-tracing-pipeline-features-khr
+                                                                                              :next (vk:make-physical-device-acceleration-structure-features-khr)))))))
+                 (enable-sampler-anisotropy-p (vk:sampler-anisotropy (vk:features supported-features)))
+                 (queue-create-infos (make-default-queue-create-infos physical-device surface))
+                 (graphics-and-present-queue-indices (map 'list #'vk:queue-family-index queue-create-infos))
+                 (graphics-queue-index (first graphics-and-present-queue-indices))
+                 (present-queue-index (or (second graphics-and-present-queue-indices)
+                                          (first graphics-and-present-queue-indices))))
+            (vk-utils:with-device (device
+                                   physical-device
+                                   (vk:make-device-create-info
+                                    :next (vk:next supported-features)
+                                    :queue-create-infos queue-create-infos
+                                    :enabled-extension-names device-extensions
+                                    :enabled-features (vk:features supported-features)))
+              (let ((vk:*default-extension-loader* (vk:make-extension-loader :instance instance
+                                                                             :device device)))
+                (let* ((window-extent (vk:make-extent-2d
+                                       :width window-width
+                                       :height window-height))
+                       (per-frame-data (prepare-per-frame-data device graphics-and-present-queue-indices))
+                       (graphics-queue (vk:get-device-queue device graphics-queue-index 0))
+                       (present-queue (vk:get-device-queue device present-queue-index 0))
+                       (descriptor-pool (make-descriptor-pool device
+                                                              (list (vk:make-descriptor-pool-size
+                                                                     :type :combined-image-sampler
+                                                                     :descriptor-count 1000)
+                                                                    (vk:make-descriptor-pool-size
+                                                                     :type :uniform-buffer
+                                                                     :descriptor-count 1000)
+                                                                    (vk:make-descriptor-pool-size
+                                                                     :type :storage-buffer
+                                                                     :descriptor-count 1000))))
+                       (swapchain-data (make-swapchain-data physical-device
                                                             device
-                                                            (cffi:foreign-type-size '(:struct uniform-buffer-object))
-                                                            '(:uniform-buffer)))
-                     (descriptor-set-layout (make-descriptor-set-layout device
-                                                                        (list '(:uniform-buffer 1 (:vertex))
-                                                                              '(:storage-buffer 1 (:vertex :fragment))
-                                                                              (list :combined-image-sampler
-                                                                                    (length textures)
-                                                                                    '(:fragment)))))
-                     (pipeline-layout (vk:create-pipeline-layout device
-                                                                 (vk:make-pipeline-layout-create-info
-                                                                  :set-layouts (list descriptor-set-layout))))
-                     (vertex-shader-module (vk:create-shader-module device
-                                                                    (vk:make-shader-module-create-info
-                                                                     :code (shaderc:compile-to-spv *vertex-shader*
-                                                                                                   :vertex-shader))))
-                     (fragment-shader-module (vk:create-shader-module device
+                                                            surface
+                                                            window-extent
+                                                            '(:color-attachment :storage)
+                                                            nil
+                                                            graphics-queue-index
+                                                            present-queue-index))
+                       (color-format (color-format swapchain-data))
+                       (depth-format (pick-depth-format physical-device))
+                       (render-pass (create-render-pass device
+                                                        color-format
+                                                        depth-format))
+                       (depth-buffer-data (make-depth-buffer-data physical-device
+                                                                  device
+                                                                  depth-format
+                                                                  window-extent))
+                       (textures (make-textures physical-device
+                                                device
+                                                enable-sampler-anisotropy-p
+                                                (command-pool (first per-frame-data))
+                                                graphics-queue))
+                       (material-buffer-data (make-materials-buffer physical-device device (length textures)))
+                       (num-vertices (* x-max y-max z-max (length +cube-data+)))
+                       (vertex-buffer-data (make-vertex-buffer physical-device
+                                                               device
+                                                               (command-pool (first per-frame-data))
+                                                               graphics-queue
+                                                               (length textures)
+                                                               x-max
+                                                               y-max
+                                                               z-max))
+                       (vertex-index-buffer-data (make-vertex-index-buffer physical-device
+                                                                           device
+                                                                           (command-pool (first per-frame-data))
+                                                                           graphics-queue
+                                                                           num-vertices))
+                       (transform (vk:make-transform-matrix-khr
+                                   :matrix #(1.0 0.0 0.0 0.0
+                                             0.0 1.0 0.0 0.0
+                                             0.0 0.0 1.0 0.0)))
+                       (transform-buffer-data (make-transform-buffer physical-device
+                                                                     device
+                                                                     (command-pool (first per-frame-data))
+                                                                     graphics-queue
+                                                                     transform))
+                       (uniform-buffer-data (make-buffer-data physical-device
+                                                              device
+                                                              (cffi:foreign-type-size '(:struct uniform-buffer-object))
+                                                              '(:uniform-buffer)))
+                       (descriptor-set-layout (make-descriptor-set-layout device
+                                                                          (list '(:uniform-buffer 1 (:vertex))
+                                                                                '(:storage-buffer 1 (:vertex :fragment))
+                                                                                (list :combined-image-sampler
+                                                                                      (length textures)
+                                                                                      '(:fragment)))))
+                       (pipeline-layout (vk:create-pipeline-layout device
+                                                                   (vk:make-pipeline-layout-create-info
+                                                                    :set-layouts (list descriptor-set-layout))))
+                       (vertex-shader-module (vk:create-shader-module device
                                                                       (vk:make-shader-module-create-info
-                                                                       :code (shaderc:compile-to-spv *fragment-shader*
-                                                                                                     :fragment-shader))))
-                     (graphics-pipeline (create-graphics-pipeline device
-                                                                  nil
-                                                                  (list vertex-shader-module nil)
-                                                                  (list fragment-shader-module nil)
-                                                                  +vertex-stride+
-                                                                  (list
-                                                                   (list :r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) 'pos))
-                                                                   (list :r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) 'nrm))
-                                                                   (list :r32g32-sfloat (cffi:foreign-slot-offset '(:struct vertex) 'tex-coord))
-                                                                   (list :r32-sint (cffi:foreign-slot-offset '(:struct vertex) 'mat-id)))
-                                                                  :counter-clockwise
-                                                                  t
-                                                                  pipeline-layout
-                                                                  render-pass))
-                     (descriptor-set (first
-                                      (vk:allocate-descriptor-sets device
-                                                                   (vk:make-descriptor-set-allocate-info
-                                                                    :descriptor-pool descriptor-pool
-                                                                    :set-layouts (list descriptor-set-layout)))))
-                     (bottom-level-acceleration-structure (make-bottom-level-acceleration-structure-data physical-device
-                                                                                                device
-                                                                                                (command-pool (first per-frame-data))
-                                                                                                graphics-queue
-                                                                                                vertex-buffer-data
-                                                                                                vertex-index-buffer-data
-                                                                                                transform-buffer-data
-                                                                                                num-vertices
-                                                                                                (/ num-vertices 3)))
-                     (top-level-acceleration-structure (make-top-level-acceleration-structure-data physical-device
-                                                                                                   device
-                                                                                                   (command-pool (first per-frame-data))
-                                                                                                   graphics-queue
-                                                                                                   transform
-                                                                                                   bottom-level-acceleration-structure))
-                     (bindings (progn
-                                 (one-time-submit device
-                                                  (command-pool (first per-frame-data))
-                                                  graphics-queue
-                                                  (lambda (command-buffer)
-                                                    (vk:cmd-pipeline-barrier command-buffer
-                                                                             nil
-                                                                             (list (vk:make-buffer-memory-barrier
-                                                                                    :src-access-mask nil
-                                                                                    :dst-access-mask '(:shader-read)
-                                                                                    :src-queue-family-index vk:+queue-family-ignored+
-                                                                                    :dst-queue-family-index vk:+queue-family-ignored+
-                                                                                    :buffer (buffer vertex-buffer-data)
-                                                                                    :offset 0
-                                                                                    :size vk:+whole-size+))
-                                                                             nil
-                                                                             '(:all-commands)
-                                                                             '(:all-commands)
-                                                                             nil)
-                                                    (vk:cmd-pipeline-barrier command-buffer
-                                                                             nil
-                                                                             (list (vk:make-buffer-memory-barrier
-                                                                                    :src-access-mask nil
-                                                                                    :dst-access-mask '(:shader-read)
-                                                                                    :src-queue-family-index vk:+queue-family-ignored+
-                                                                                    :dst-queue-family-index vk:+queue-family-ignored+
-                                                                                    :buffer (buffer vertex-index-buffer-data)
-                                                                                    :offset 0
-                                                                                    :size vk:+whole-size+))
-                                                                             nil
-                                                                             '(:all-commands)
-                                                                             '(:all-commands)
-                                                                             nil)))
-                                 (loop for b in (list '(:acceleration-structure-khr 1 (:raygen :closest-hit))
-                                                      '(:storage-image 1 (:raygen))
-                                                      '(:uniform-buffer 1 (:raygen))
-                                                      '(:storage-buffer 1 (:closest-hit))
-                                                      '(:storage-buffer 1 (:closest-hit))
-                                                      '(:storage-buffer 1 (:closest-hit))
-                                                      (list :combined-image-sampler (length textures) '(:closest-hit)))
-                                       for i from 0
-                                       collect (vk:make-descriptor-set-layout-binding
-                                                :binding i
-                                                :descriptor-type (first b)
-                                                :descriptor-count (second b)
-                                                :stage-flags (third b)))))
-                     (ray-tracing-descriptor-pool (vk:create-descriptor-pool
-                                                   device
-                                                   (vk:make-descriptor-pool-create-info
-                                                    :flags '(:free-descriptor-set)
-                                                    :max-sets (length (images swapchain-data))
-                                                    :pool-sizes (loop for b in bindings
-                                                                      collect (vk:make-descriptor-pool-size
-                                                                               :type (vk:descriptor-type b)
-                                                                               :descriptor-count (* (length (images swapchain-data))
-                                                                                                    (vk:descriptor-count b)))))))
-                     (ray-tracing-descriptor-set-layout (vk:create-descriptor-set-layout
-                                                         device
-                                                         (vk:make-descriptor-set-layout-create-info
-                                                          :bindings bindings)))
-                     (ray-tracing-descriptor-sets (vk:allocate-descriptor-sets
-                                                   device
-                                                   (vk:make-descriptor-set-allocate-info
-                                                    :descriptor-pool ray-tracing-descriptor-pool
-                                                    :set-layouts (loop for i from 0 below (length (images swapchain-data))
-                                                                       collect ray-tracing-descriptor-set-layout))))
-                     (write-descriptor-set-acceleration (vk:make-write-descriptor-set-acceleration-structure-khr
-                                                         :acceleration-structures (list (acceleration-structure top-level-acceleration-structure))))
-                     (ray-tracing-shader-compile-opts (make-instance 'shaderc:compile-options-set
-                                                                     :target-spirv :spv-1-4))
-                     (raygen-shader-module (vk:create-shader-module device
+                                                                       :code (shaderc:compile-to-spv *vertex-shader*
+                                                                                                     :vertex-shader))))
+                       (fragment-shader-module (vk:create-shader-module device
+                                                                        (vk:make-shader-module-create-info
+                                                                         :code (shaderc:compile-to-spv *fragment-shader*
+                                                                                                       :fragment-shader))))
+                       (graphics-pipeline (create-graphics-pipeline device
+                                                                    nil
+                                                                    (list vertex-shader-module nil)
+                                                                    (list fragment-shader-module nil)
+                                                                    +vertex-stride+
+                                                                    (list
+                                                                     (list :r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) 'pos))
+                                                                     (list :r32g32b32-sfloat (cffi:foreign-slot-offset '(:struct vertex) 'nrm))
+                                                                     (list :r32g32-sfloat (cffi:foreign-slot-offset '(:struct vertex) 'tex-coord))
+                                                                     (list :r32-sint (cffi:foreign-slot-offset '(:struct vertex) 'mat-id)))
+                                                                    :counter-clockwise
+                                                                    t
+                                                                    pipeline-layout
+                                                                    render-pass))
+                       (descriptor-set (first
+                                        (vk:allocate-descriptor-sets device
+                                                                     (vk:make-descriptor-set-allocate-info
+                                                                      :descriptor-pool descriptor-pool
+                                                                      :set-layouts (list descriptor-set-layout)))))
+                       (bottom-level-acceleration-structure (make-bottom-level-acceleration-structure-data physical-device
+                                                                                                           device
+                                                                                                           (command-pool (first per-frame-data))
+                                                                                                           graphics-queue
+                                                                                                           vertex-buffer-data
+                                                                                                           vertex-index-buffer-data
+                                                                                                           transform-buffer-data
+                                                                                                           num-vertices
+                                                                                                           (/ num-vertices 3)))
+                       (top-level-acceleration-structure (make-top-level-acceleration-structure-data physical-device
+                                                                                                     device
+                                                                                                     (command-pool (first per-frame-data))
+                                                                                                     graphics-queue
+                                                                                                     transform
+                                                                                                     bottom-level-acceleration-structure))
+                       (bindings (progn
+                                   (one-time-submit device
+                                                    (command-pool (first per-frame-data))
+                                                    graphics-queue
+                                                    (lambda (command-buffer)
+                                                      (vk:cmd-pipeline-barrier command-buffer
+                                                                               nil
+                                                                               (list (vk:make-buffer-memory-barrier
+                                                                                      :src-access-mask nil
+                                                                                      :dst-access-mask '(:shader-read)
+                                                                                      :src-queue-family-index vk:+queue-family-ignored+
+                                                                                      :dst-queue-family-index vk:+queue-family-ignored+
+                                                                                      :buffer (buffer vertex-buffer-data)
+                                                                                      :offset 0
+                                                                                      :size vk:+whole-size+))
+                                                                               nil
+                                                                               '(:all-commands)
+                                                                               '(:all-commands)
+                                                                               nil)
+                                                      (vk:cmd-pipeline-barrier command-buffer
+                                                                               nil
+                                                                               (list (vk:make-buffer-memory-barrier
+                                                                                      :src-access-mask nil
+                                                                                      :dst-access-mask '(:shader-read)
+                                                                                      :src-queue-family-index vk:+queue-family-ignored+
+                                                                                      :dst-queue-family-index vk:+queue-family-ignored+
+                                                                                      :buffer (buffer vertex-index-buffer-data)
+                                                                                      :offset 0
+                                                                                      :size vk:+whole-size+))
+                                                                               nil
+                                                                               '(:all-commands)
+                                                                               '(:all-commands)
+                                                                               nil)))
+                                   (loop for b in (list '(:acceleration-structure-khr 1 (:raygen :closest-hit))
+                                                        '(:storage-image 1 (:raygen))
+                                                        '(:uniform-buffer 1 (:raygen))
+                                                        '(:storage-buffer 1 (:closest-hit))
+                                                        '(:storage-buffer 1 (:closest-hit))
+                                                        '(:storage-buffer 1 (:closest-hit))
+                                                        (list :combined-image-sampler (length textures) '(:closest-hit)))
+                                         for i from 0
+                                         collect (vk:make-descriptor-set-layout-binding
+                                                  :binding i
+                                                  :descriptor-type (first b)
+                                                  :descriptor-count (second b)
+                                                  :stage-flags (third b)))))
+                       (ray-tracing-descriptor-pool (vk:create-descriptor-pool
+                                                     device
+                                                     (vk:make-descriptor-pool-create-info
+                                                      :flags '(:free-descriptor-set)
+                                                      :max-sets (length (images swapchain-data))
+                                                      :pool-sizes (loop for b in bindings
+                                                                        collect (vk:make-descriptor-pool-size
+                                                                                 :type (vk:descriptor-type b)
+                                                                                 :descriptor-count (* (length (images swapchain-data))
+                                                                                                      (vk:descriptor-count b)))))))
+                       (ray-tracing-descriptor-set-layout (vk:create-descriptor-set-layout
+                                                           device
+                                                           (vk:make-descriptor-set-layout-create-info
+                                                            :bindings bindings)))
+                       (ray-tracing-descriptor-sets (vk:allocate-descriptor-sets
+                                                     device
+                                                     (vk:make-descriptor-set-allocate-info
+                                                      :descriptor-pool ray-tracing-descriptor-pool
+                                                      :set-layouts (loop for i from 0 below (length (images swapchain-data))
+                                                                         collect ray-tracing-descriptor-set-layout))))
+                       (write-descriptor-set-acceleration (vk:make-write-descriptor-set-acceleration-structure-khr
+                                                           :acceleration-structures (list (acceleration-structure top-level-acceleration-structure))))
+                       (ray-tracing-shader-compile-opts (make-instance 'shaderc:compile-options-set
+                                                                       :target-spirv :spv-1-4))
+                       (raygen-shader-module (vk:create-shader-module device
+                                                                      (vk:make-shader-module-create-info
+                                                                       :code (shaderc:compile-to-spv *raygen-shader*
+                                                                                                     :raygen-shader
+                                                                                                     :options ray-tracing-shader-compile-opts))))
+                       (miss-shader-module (vk:create-shader-module device
                                                                     (vk:make-shader-module-create-info
-                                                                     :code (shaderc:compile-to-spv *raygen-shader*
-                                                                                                   :raygen-shader
+                                                                     :code (shaderc:compile-to-spv *miss-shader*
+                                                                                                   :miss-shader
                                                                                                    :options ray-tracing-shader-compile-opts))))
-                     (miss-shader-module (vk:create-shader-module device
-                                                                  (vk:make-shader-module-create-info
-                                                                   :code (shaderc:compile-to-spv *miss-shader*
-                                                                                                 :miss-shader
-                                                                                                 :options ray-tracing-shader-compile-opts))))
-                     (shadow-miss-shader-module (vk:create-shader-module device
-                                                                         (vk:make-shader-module-create-info
-                                                                          :code (shaderc:compile-to-spv *shadow-miss-shader*
-                                                                                                        :miss-shader
-                                                                                                        :options ray-tracing-shader-compile-opts))))
-                     (closest-hit-shader-module (vk:create-shader-module device
-                                                                         (vk:make-shader-module-create-info
-                                                                          :code (shaderc:compile-to-spv *closest-hit-shader*
-                                                                                                        :closesthit-shader
-                                                                                                        :options ray-tracing-shader-compile-opts))))
-                     (shader-stages (loop for s in (list
-                                                    (list :raygen raygen-shader-module)
-                                                    (list :miss miss-shader-module)
-                                                    (list :miss shadow-miss-shader-module)
-                                                    (list :closest-hit closest-hit-shader-module))
-                                          collect (vk:make-pipeline-shader-stage-create-info
-                                                   :stage (first s)
-                                                   :module (second s)
-                                                   :name "main")))
-                     (shader-groups (loop for g in (list
-                                                    (list :general-khr 0 vk:+shader-unused-khr+)
-                                                    (list :general-khr 1 vk:+shader-unused-khr+)
-                                                    (list :general-khr 2 vk:+shader-unused-khr+)
-                                                    (list :triangles-hit-group-khr vk:+shader-unused-khr+ 3)
-                                                    (list :triangles-hit-group-khr vk:+shader-unused-khr+ vk:+shader-unused-khr+))
-                                          collect (vk:make-ray-tracing-shader-group-create-info-khr
-                                                   :type (first g)
-                                                   :general-shader (second g)
-                                                   :closest-hit-shader (third g)
-                                                   :any-hit-shader vk:+shader-unused-khr+
-                                                   :intersection-shader vk:+shader-unused-khr+)))
-                     (ray-tracing-pipeline-layout (vk:create-pipeline-layout device
-                                                                             (vk:make-pipeline-layout-create-info
-                                                                              :set-layouts (list ray-tracing-descriptor-set-layout))))
-                     (ray-tracing-pipeline (first (vk:create-ray-tracing-pipelines-khr device
-                                                                                       (list (vk:make-ray-tracing-pipeline-create-info-khr
-                                                                                              :stages shader-stages
-                                                                                              :groups shader-groups
-                                                                                              :max-pipeline-ray-recursion-depth 2
-                                                                                              :layout ray-tracing-pipeline-layout))))))
-                ;; use this for khr raytracing:
-                ;; https://github.com/KhronosGroup/Vulkan-Samples/blob/master/samples/extensions/raytracing_basic/raytracing_basic.cpp
-                (unwind-protect
-                     (with-framebuffers (framebuffers
-                                         device
-                                         render-pass
-                                         (image-views swapchain-data)
-                                         (image-view depth-buffer-data)
-                                         window-extent)
-                       (update-descriptor-sets device
-                                               descriptor-set
-                                               (list
-                                                (list :uniform-buffer (buffer uniform-buffer-data) nil)
-                                                (list :storage-buffer (buffer material-buffer-data) nil))
-                                               textures)
-                       (vk:update-descriptor-sets device
-                                                  (loop for s in ray-tracing-descriptor-sets
-                                                        collect (vk:make-write-descriptor-set
-                                                                 :next write-descriptor-set-acceleration
-                                                                 :dst-set s
-                                                                 :dst-binding 0
-                                                                 :dst-array-element 0
-                                                                 :descriptor-type (vk:descriptor-type (first bindings))))
-                                                  nil)
-                       (loop for s in ray-tracing-descriptor-sets do
-                             (update-descriptor-sets device
-                                                     s
-                                                     (list
-                                                      (list (vk:descriptor-type (third bindings)) (buffer uniform-buffer-data) nil)
-                                                      (list (vk:descriptor-type (fourth bindings)) (buffer vertex-buffer-data) nil)
-                                                      (list (vk:descriptor-type (fifth bindings)) (buffer vertex-index-buffer-data) nil)
-                                                      (list (vk:descriptor-type (sixth bindings)) (buffer material-buffer-data) nil))
-                                                     textures
-                                                     2))
-                       (vk:next (vk:get-physical-device-properties-2 physical-device
-                                                                     (vk:make-physical-device-properties-2
-                                                                      :next (vk:make-physical-device-ray-tracing-pipeline-properties-khr)
-                                                                      ;; todo: this should not have to be explicitly set
-                                                                      :properties (vk:get-physical-device-properties physical-device))))
-                       )
-                  (vk:device-wait-idle device)
-                  
-                  (vk:destroy-pipeline device ray-tracing-pipeline)
-                  (vk:destroy-pipeline-layout device ray-tracing-pipeline-layout)
-                  (vk:destroy-shader-module device closest-hit-shader-module)
-                  (vk:destroy-shader-module device shadow-miss-shader-module)
-                  (vk:destroy-shader-module device miss-shader-module)
-                  (vk:destroy-shader-module device raygen-shader-module)
-                  (vk:free-descriptor-sets device ray-tracing-descriptor-pool ray-tracing-descriptor-sets)
-                  (vk:destroy-descriptor-set-layout device ray-tracing-descriptor-set-layout)
-                  (vk:destroy-descriptor-pool device ray-tracing-descriptor-pool)
-                  (clear-handle-data device top-level-acceleration-structure)
-                  (clear-handle-data device bottom-level-acceleration-structure)
-                  (vk:free-descriptor-sets device descriptor-pool (list descriptor-set))
-                  (vk:destroy-pipeline device graphics-pipeline)
-                  (vk:destroy-shader-module device fragment-shader-module)
-                  (vk:destroy-shader-module device vertex-shader-module)
-                  (vk:destroy-pipeline-layout device pipeline-layout)
-                  (vk:destroy-descriptor-set-layout device descriptor-set-layout)
-                  (clear-handle-data device uniform-buffer-data)
-                  (clear-handle-data device transform-buffer-data)
-                  (clear-handle-data device vertex-index-buffer-data)
-                  (clear-handle-data device vertex-buffer-data)
-                  (clear-handle-data device material-buffer-data)
-                  (loop for texture in textures
-                        do (clear-handle-data device texture))
-                  (clear-handle-data device depth-buffer-data)
-                  (vk:destroy-render-pass device render-pass)
-                  (clear-handle-data device swapchain-data)
-                  (vk:destroy-descriptor-pool device descriptor-pool)
-                  (loop for frame-data in per-frame-data
-                        do (clear-handle-data device frame-data)))))))))))
+                       (shadow-miss-shader-module (vk:create-shader-module device
+                                                                           (vk:make-shader-module-create-info
+                                                                            :code (shaderc:compile-to-spv *shadow-miss-shader*
+                                                                                                          :miss-shader
+                                                                                                          :options ray-tracing-shader-compile-opts))))
+                       (closest-hit-shader-module (vk:create-shader-module device
+                                                                           (vk:make-shader-module-create-info
+                                                                            :code (shaderc:compile-to-spv *closest-hit-shader*
+                                                                                                          :closesthit-shader
+                                                                                                          :options ray-tracing-shader-compile-opts))))
+                       (shader-stages (loop for s in (list
+                                                      (list :raygen raygen-shader-module)
+                                                      (list :miss miss-shader-module)
+                                                      (list :miss shadow-miss-shader-module)
+                                                      (list :closest-hit closest-hit-shader-module))
+                                            collect (vk:make-pipeline-shader-stage-create-info
+                                                     :stage (first s)
+                                                     :module (second s)
+                                                     :name "main")))
+                       (shader-groups (loop for g in (list
+                                                      (list :general-khr 0 vk:+shader-unused-khr+)
+                                                      (list :general-khr 1 vk:+shader-unused-khr+)
+                                                      (list :general-khr 2 vk:+shader-unused-khr+)
+                                                      (list :triangles-hit-group-khr vk:+shader-unused-khr+ 3)
+                                                      (list :triangles-hit-group-khr vk:+shader-unused-khr+ vk:+shader-unused-khr+))
+                                            collect (vk:make-ray-tracing-shader-group-create-info-khr
+                                                     :type (first g)
+                                                     :general-shader (second g)
+                                                     :closest-hit-shader (third g)
+                                                     :any-hit-shader vk:+shader-unused-khr+
+                                                     :intersection-shader vk:+shader-unused-khr+)))
+                       (ray-tracing-pipeline-layout (vk:create-pipeline-layout device
+                                                                               (vk:make-pipeline-layout-create-info
+                                                                                :set-layouts (list ray-tracing-descriptor-set-layout))))
+                       (ray-tracing-pipeline (first (vk:create-ray-tracing-pipelines-khr device
+                                                                                         (list (vk:make-ray-tracing-pipeline-create-info-khr
+                                                                                                :stages shader-stages
+                                                                                                :groups shader-groups
+                                                                                                :max-pipeline-ray-recursion-depth 2
+                                                                                                :layout ray-tracing-pipeline-layout)))))
+                       (ray-tracing-pipeline-properties (vk:next (vk:get-physical-device-properties-2
+                                                                  physical-device
+                                                                  (vk:make-physical-device-properties-2
+                                                                   :next (vk:make-physical-device-ray-tracing-pipeline-properties-khr)
+                                                                   ;; todo: this should not have to be explicitly set
+                                                                   :properties (vk:get-physical-device-properties physical-device)))))
+                       (handle-size (vk:shader-group-handle-size ray-tracing-pipeline-properties))
+                       (handle-alignment (vk:shader-group-handle-alignment ray-tracing-pipeline-properties))
+                       (handle-size-aligned (round-up handle-size handle-alignment))
+                       (group-count (length shader-groups))
+                       (shader-binding-table-size (* group-count handle-size-aligned))
+                       (raygen-shader-binding-table (make-shader-binding-table-buffer physical-device
+                                                                                      device
+                                                                                      ray-tracing-pipeline
+                                                                                      shader-binding-table-size
+                                                                                      group-count
+                                                                                      handle-size
+                                                                                      handle-size-aligned
+                                                                                      '(0)))
+                       (miss-shader-binding-table (make-shader-binding-table-buffer physical-device
+                                                                                    device
+                                                                                    ray-tracing-pipeline
+                                                                                    shader-binding-table-size
+                                                                                    group-count
+                                                                                    handle-size
+                                                                                    handle-size-aligned
+                                                                                    '(1 2)))
+                       (hit-shader-binding-table (make-shader-binding-table-buffer physical-device
+                                                                                   device
+                                                                                   ray-tracing-pipeline
+                                                                                   shader-binding-table-size
+                                                                                   group-count
+                                                                                   handle-size
+                                                                                   handle-size-aligned
+                                                                                   '(3 4)))
+                       ;; remove sbt stuff below
+                       (shader-binding-table-usage-flags '(:shader-binding-table :transfer-src :shader-device-address))
+                       (shader-handle-storage (cffi:with-foreign-object (stb-ptr :uint8 shader-binding-table-size)
+                                                (vk:get-ray-tracing-shader-group-handles-khr device
+                                                                                             ray-tracing-pipeline
+                                                                                             0 ;; first group
+                                                                                             group-count
+                                                                                             shader-binding-table-size
+                                                                                             stb-ptr)
+                                                (loop for i from 0 below shader-binding-table-size
+                                                      collect (cffi:mem-aref stb-ptr :uint8 i))))
+                       (raygen-shader-binding-offset 0)
+                       (raygen-shader-table-size (vk:shader-group-handle-size ray-tracing-pipeline-properties))
+                       (miss-shader-binding-offset (+ raygen-shader-binding-offset (round-up raygen-shader-table-size
+                                                                                             (vk:shader-group-base-alignment ray-tracing-pipeline-properties))))
+                       (miss-shader-binding-stride (vk:shader-group-handle-size ray-tracing-pipeline-properties))
+                       (miss-shader-table-size (* 2 miss-shader-binding-stride))
+                       (hit-shader-binding-offset (+ miss-shader-binding-offset (round-up miss-shader-table-size
+                                                                                          (vk:shader-group-base-alignment ray-tracing-pipeline-properties))))
+                       (hit-shader-binding-stride (vk:shader-group-handle-size ray-tracing-pipeline-properties))
+                       (hit-shader-table-size (* 2 hit-shader-binding-stride))
+                       (shader-binding-table-size (+ hit-shader-binding-offset hit-shader-table-size))
+                       (shader-binding-table-buffer-data (let ((buffer (make-buffer-data physical-device
+                                                                                         device
+                                                                                         shader-binding-table-size
+                                                                                         '(:transfer-dst))))
+                                                           (copy-to-device device
+                                                                           (device-memory buffer)
+                                                                           shader-handle-storage
+                                                                           :uint8)
+                                                           buffer))
+                       (clear-values (list
+                                      (vk:make-clear-value
+                                       :color (vk:make-clear-color-value
+                                               :float-32 #(0.2 0.2 0.2 0.2)))
+                                      (vk:make-clear-value
+                                       :depth-stencil (vk:make-clear-depth-stencil-value
+                                                       :depth 1.0
+                                                       :stencil 0)))))
+                  ;; use this for khr raytracing:
+                  ;; https://github.com/KhronosGroup/Vulkan-Samples/blob/master/samples/extensions/raytracing_basic/raytracing_basic.cpp
+                  (unwind-protect
+                       (with-framebuffers (framebuffers
+                                           device
+                                           render-pass
+                                           (image-views swapchain-data)
+                                           (image-view depth-buffer-data)
+                                           window-extent)
+                         (update-descriptor-sets device
+                                                 descriptor-set
+                                                 (list
+                                                  (list :uniform-buffer (buffer uniform-buffer-data) nil)
+                                                  (list :storage-buffer (buffer material-buffer-data) nil))
+                                                 textures)
+                         (vk:update-descriptor-sets device
+                                                    (loop for s in ray-tracing-descriptor-sets
+                                                          collect (vk:make-write-descriptor-set
+                                                                   :next write-descriptor-set-acceleration
+                                                                   :dst-set s
+                                                                   :dst-binding 0
+                                                                   :dst-array-element 0
+                                                                   :descriptor-type (vk:descriptor-type (first bindings))))
+                                                    nil)
+                         (loop for s in ray-tracing-descriptor-sets do
+                               (update-descriptor-sets device
+                                                       s
+                                                       (list
+                                                        (list (vk:descriptor-type (third bindings)) (buffer uniform-buffer-data) nil)
+                                                        (list (vk:descriptor-type (fourth bindings)) (buffer vertex-buffer-data) nil)
+                                                        (list (vk:descriptor-type (fifth bindings)) (buffer vertex-index-buffer-data) nil)
+                                                        (list (vk:descriptor-type (sixth bindings)) (buffer material-buffer-data) nil))
+                                                       textures
+                                                       2))
+                       
+                         (loop with uniform-buffer-object = (make-instance 'uniform-buffer-object
+                                                                           :model (rtg-math.matrix4:identity)
+                                                                           :model-i-t (rtg-math.matrix4:identity))
+                               with accumulated-time = 0.0
+                               with frame-count = 0
+                               for frame-index = 0 then (mod (1+ frame-index) *queued-frames*)
+                               for start-time = (glfw:get-time)
+                               for current-frame-data = (nth frame-index per-frame-data)
+                               for command-buffer = (command-buffer current-frame-data)
+                               while (not (glfw:window-should-close-p)) do
+                               (glfw:poll-events)
+
+                               ;; todo: handle window resize
+
+                               ;; update uniform-buffer-object
+                               (setf (view uniform-buffer-object) (matrix camera-manipulator))
+                               (setf (proj uniform-buffer-object) (rtg-math.projection:perspective (float (vk:width window-extent))
+                                                                                                   (float (vk:height window-extent))
+                                                                                                   0.1
+                                                                                                   1000.0
+                                                                                                   65.0))
+                               (setf (aref (proj uniform-buffer-object) 5)
+                                     (* (aref (proj uniform-buffer-object) 5) -1))
+                               (setf (view-inverse uniform-buffer-object) (rtg-math.matrix4:inverse (view uniform-buffer-object)))
+                               (setf (proj-inverse uniform-buffer-object) (rtg-math.matrix4:inverse (proj uniform-buffer-object)))
+                               (copy-to-device device
+                                               (device-memory uniform-buffer-data)
+                                               uniform-buffer-object
+                                               '(:struct uniform-buffer-object))
+
+                               ;; frame begin
+                               (let ((back-buffer-index (vk:acquire-next-image-khr device
+                                                                                   (swapchain swapchain-data)
+                                                                                   +uint64-max+
+                                                                                   (present-complete-semaphore current-frame-data))))
+                                 (loop while (eq :timeout (vk:wait-for-fences device (list (fence current-frame-data)) t +fence-timeout+)))
+                                 (vk:reset-fences device (list (fence current-frame-data)))
+
+                                 (vk:begin-command-buffer command-buffer (vk:make-command-buffer-begin-info :flags '(:one-time-submit)))
+                                 (if use-raster-render
+                                     (progn
+                                       (vk:cmd-begin-render-pass command-buffer
+                                                                 (vk:make-render-pass-begin-info
+                                                                  :render-pass render-pass
+                                                                  :framebuffer (nth back-buffer-index framebuffers)
+                                                                  :render-area (vk:make-rect-2d
+                                                                                :offset (vk:make-offset-2d :x 0 :y 0)
+                                                                                :extent window-extent)
+                                                                  :clear-values clear-values)
+                                                                 :inline)
+                                       (vk:cmd-bind-pipeline command-buffer :graphics graphics-pipeline)
+                                       (vk:cmd-bind-descriptor-sets command-buffer :graphics pipeline-layout 0 (list descriptor-set) nil)
+                                       (vk:cmd-set-viewport command-buffer
+                                                            0
+                                                            (list
+                                                             (vk:make-viewport
+                                                              :x 0.0
+                                                              :y 0.0
+                                                              :width (float (vk:width window-extent))
+                                                              :height (float (vk:height window-extent))
+                                                              :min-depth 0.0
+                                                              :max-depth 1.0)))
+                                       (vk:cmd-set-scissor command-buffer
+                                                           0
+                                                           (list
+                                                            (vk:make-rect-2d
+                                                             :offset (vk:make-offset-2d :x 0 :y 0)
+                                                             :extent window-extent)))
+                                       (vk:cmd-bind-vertex-buffers command-buffer
+                                                                   0
+                                                                   (list (buffer vertex-buffer-data))
+                                                                   '(0))
+                                       (vk:cmd-bind-index-buffer command-buffer
+                                                                 (buffer vertex-index-buffer-data)
+                                                                 0
+                                                                 :uint32)
+                                       (vk:cmd-draw-indexed command-buffer
+                                                            num-vertices
+                                                            1
+                                                            0
+                                                            0
+                                                            0)
+                                       (vk:cmd-end-render-pass command-buffer))
+                                     (progn
+                                       (vk:update-descriptor-sets device
+                                                                  (list (vk:make-write-descriptor-set
+                                                                         :dst-set (nth back-buffer-index ray-tracing-descriptor-sets)
+                                                                         :dst-binding 1
+                                                                         :dst-array-element 0
+                                                                         :descriptor-type (vk:descriptor-type (second bindings))
+                                                                         :image-info (list (vk:make-descriptor-image-info
+                                                                                            :sampler nil
+                                                                                            :image-view (nth back-buffer-index (image-views swapchain-data))
+                                                                                            :image-layout :general))))
+                                                                  nil)
+                                       (set-image-layout command-buffer
+                                                         (nth back-buffer-index (images swapchain-data))
+                                                         color-format
+                                                         :undefined
+                                                         :general)
+                                       (vk:cmd-bind-pipeline command-buffer
+                                                             :ray-tracing-khr
+                                                             ray-tracing-pipeline)
+                                       (vk:cmd-bind-descriptor-sets command-buffer
+                                                                    :ray-tracing-khr
+                                                                    ray-tracing-pipeline-layout
+                                                                    0
+                                                                    (list (nth back-buffer-index ray-tracing-descriptor-sets))
+                                                                    nil)
+                                       (vk:cmd-trace-rays-khr command-buffer
+                                                              (vk:make-strided-device-address-region-khr
+                                                               :device-address (vk:device-address
+                                                                                (get-buffer-device-address device raygen-shader-binding-table))
+                                                               :stride handle-size-aligned
+                                                               :size handle-size-aligned)
+                                                              (vk:make-strided-device-address-region-khr
+                                                               :device-address (vk:device-address
+                                                                                (get-buffer-device-address device miss-shader-binding-table))
+                                                               :stride handle-size-aligned
+                                                               :size (* 2 handle-size-aligned))
+                                                              (vk:make-strided-device-address-region-khr
+                                                               :device-address (vk:device-address
+                                                                                (get-buffer-device-address device hit-shader-binding-table))
+                                                               :stride handle-size-aligned
+                                                               :size (* 2 handle-size-aligned))
+                                                              (vk:make-strided-device-address-region-khr
+                                                               :device-address 0
+                                                               :stride 0
+                                                               :size 0)
+                                                              (vk:width window-extent)
+                                                              (vk:height window-extent)
+                                                              1)
+                                       (set-image-layout command-buffer
+                                                         (nth back-buffer-index (images swapchain-data))
+                                                         color-format
+                                                         :general
+                                                         :present-src-khr)))
+                                 (vk:end-command-buffer command-buffer)
+                                 (vk:queue-submit graphics-queue
+                                                  (list
+                                                   (vk:make-submit-info
+                                                    :wait-semaphores (list (present-complete-semaphore current-frame-data))
+                                                    :wait-dst-stage-mask '(:color-attachment-output)
+                                                    :command-buffers (list command-buffer)
+                                                    :signal-semaphores (list (render-complete-semaphore current-frame-data))))
+                                                  (fence current-frame-data))
+                                 (vk:queue-present-khr present-queue
+                                                       (vk:make-present-info-khr
+                                                        :wait-semaphores (list (render-complete-semaphore current-frame-data))
+                                                        :swapchains (list (swapchain swapchain-data))
+                                                        :image-indices (list back-buffer-index))))
+
+                               ;; prepare next iteration
+                               (setf accumulated-time (+ accumulated-time (- (glfw:get-time) start-time)))
+                               (incf frame-count)
+                               (when (< 1.0 accumulated-time)
+                                 (glfw:set-window-title
+                                  (format nil "~a: ~a Vertices ~:[RayTracing~;Rasterizing~] (~5$ fps)~%"
+                                          app-name
+                                          num-vertices
+                                          use-raster-render
+                                          (float (/ frame-count accumulated-time))))
+                                 (setf accumulated-time 0.0)
+                                 (setf frame-count 0)))
+                         (vk:device-wait-idle device))
+                    (clear-handle-data device raygen-shader-binding-table)
+                    (clear-handle-data device miss-shader-binding-table)
+                    (clear-handle-data device hit-shader-binding-table)
+                    (clear-handle-data device shader-binding-table-buffer-data)
+                    (vk:destroy-pipeline device ray-tracing-pipeline)
+                    (vk:destroy-pipeline-layout device ray-tracing-pipeline-layout)
+                    (vk:destroy-shader-module device closest-hit-shader-module)
+                    (vk:destroy-shader-module device shadow-miss-shader-module)
+                    (vk:destroy-shader-module device miss-shader-module)
+                    (vk:destroy-shader-module device raygen-shader-module)
+                    (vk:free-descriptor-sets device ray-tracing-descriptor-pool ray-tracing-descriptor-sets)
+                    (vk:destroy-descriptor-set-layout device ray-tracing-descriptor-set-layout)
+                    (vk:destroy-descriptor-pool device ray-tracing-descriptor-pool)
+                    (clear-handle-data device top-level-acceleration-structure)
+                    (clear-handle-data device bottom-level-acceleration-structure)
+                    (vk:free-descriptor-sets device descriptor-pool (list descriptor-set))
+                    (vk:destroy-pipeline device graphics-pipeline)
+                    (vk:destroy-shader-module device fragment-shader-module)
+                    (vk:destroy-shader-module device vertex-shader-module)
+                    (vk:destroy-pipeline-layout device pipeline-layout)
+                    (vk:destroy-descriptor-set-layout device descriptor-set-layout)
+                    (clear-handle-data device uniform-buffer-data)
+                    (clear-handle-data device transform-buffer-data)
+                    (clear-handle-data device vertex-index-buffer-data)
+                    (clear-handle-data device vertex-buffer-data)
+                    (clear-handle-data device material-buffer-data)
+                    (loop for texture in textures
+                          do (clear-handle-data device texture))
+                    (clear-handle-data device depth-buffer-data)
+                    (vk:destroy-render-pass device render-pass)
+                    (clear-handle-data device swapchain-data)
+                    (vk:destroy-descriptor-pool device descriptor-pool)
+                    (loop for frame-data in per-frame-data
+                          do (clear-handle-data device frame-data))))))))))))

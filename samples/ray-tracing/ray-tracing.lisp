@@ -114,7 +114,7 @@ void main()
 layout(location = 0) rayPayloadInEXT vec3 hitValue;
 void main()
 {
-  hitValue = gl_WorldRayDirectionEXT;//vec3(0.0, 0.1, 0.3);
+  hitValue = vec3(0.0, 0.1, 0.3);
 }")
 
 (defparameter *shadow-miss-shader*
@@ -886,7 +886,7 @@ void main()
                                          indices)
   (let ((buffer (make-buffer-data physical-device
                                   device
-                                  handle-size-aligned
+                                  (* (length indices) handle-size-aligned)
                                   '(:shader-binding-table :transfer-src :shader-device-address))))
     (cffi:with-foreign-object (sbt-ptr :uint8 shader-binding-table-size)
       (vk:get-ray-tracing-shader-group-handles-khr device

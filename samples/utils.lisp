@@ -530,20 +530,20 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                   :code ,code))
      (progn ,@body)))
 
+(defun make-framebuffers (device render-pass swapchain-image-views depth-image-view swapchain-extent)
+  (loop for swapchain-image-view in swapchain-image-views
+        collect (vk:create-framebuffer device
+                                       (vk:make-framebuffer-create-info
+                                        :render-pass render-pass
+                                        :attachments (list swapchain-image-view depth-image-view)
+                                        :width (vk:width swapchain-extent)
+                                        :height (vk:height swapchain-extent)
+                                        :layers 1))))
+
 (defmacro with-framebuffers ((framebuffers device render-pass swapchain-image-views depth-image-view swapchain-extent) &body body)
   (let ((swapchain-image-view (gensym "SWAP-CHAIN-IMAGE-VIEW"))
         (framebuffer (gensym "FRAME-BUFFER")))
-    `(let ((,framebuffers
-             (loop for ,swapchain-image-view in ,swapchain-image-views
-                   collect (vk:create-framebuffer ,device
-                                                  (vk:make-framebuffer-create-info
-                                                   :render-pass ,render-pass
-                                                   :attachments (list
-                                                                 ,swapchain-image-view
-                                                                 ,depth-image-view)
-                                                   :width (vk:width ,swapchain-extent)
-                                                   :height (vk:height ,swapchain-extent)
-                                                   :layers 1)))))
+    `(let ((,framebuffers (make-framebuffers ,device ,render-pass ,swapchain-image-views ,depth-image-view ,swapchain-extent)))
        (unwind-protect
             (progn ,@body)
          (loop for ,framebuffer in ,framebuffers

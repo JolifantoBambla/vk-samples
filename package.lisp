@@ -70,6 +70,7 @@
    #:clear-handle-data
    #:make-swapchain-data
    #:allocated-device-memory
+   #:make-framebuffers
    #:make-image-data
    #:make-depth-buffer-data
    #:make-buffer-data

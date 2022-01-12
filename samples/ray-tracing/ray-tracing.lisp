@@ -114,7 +114,7 @@ void main()
 layout(location = 0) rayPayloadInEXT vec3 hitValue;
 void main()
 {
-  hitValue = vec3(0.0, 0.1, 0.3);
+  hitValue = vec3(0.2, 0.2, 0.2);
 }")
 
 (defparameter *shadow-miss-shader*
@@ -275,9 +275,84 @@ void main()
               (setf center-position new-pos)
               (setf camera-position new-pos)))))))
 
-(defun dolly (cam delta))
-(defun pan (cam delta))
-(defun trackball (cam position))
+(defun dolly (cam delta)
+  (with-slots (camera-position center-position movement-speed mode up-vector) cam
+    (let* ((z (rtg-math.vector3:- center-position camera-position))
+           (distance (rtg-math.vector3:length z)))
+      (unless (close-to-zerop distance)
+        (let* ((dd (if (eq mode :examine)
+                       (aref delta (if (> (abs (aref delta 0)) (abs (aref delta 1))) 0 1))
+                       (- (rtg-math:y delta))))
+               (factor (* movement-speed (/ dd distance))))
+          (setf distance (/ distance 10))
+          (setf distance (if (< distance 0.001) 0.001 distance))
+          (setf factor (* factor distance))
+          (unless (<= 1.0 factor)
+            (setf z (rtg-math.vector3:*s z factor))
+            (when (eq mode :walk)
+              (setf (aref z (if (> (rtg-math:y up-vector) (rtg-math:z up-vector)) 1 2))
+                    0.0))
+            (setf camera-position (rtg-math.vector3:+ camera-position z))
+            (when (eq mode :examine)
+              (setf center-position (rtg-math.vector3:+ center-position z)))))))))
+
+(defun wheel (cam value)
+  (with-slots (camera-position center-position window-size movement-speed) cam
+    (let* ((dx (/ (* value (abs value)) (rtg-math:x window-size)))
+           (z (rtg-math.vector3:- center-position camera-position))
+           (distance (let ((d (* 0.1 (rtg-math.vector3:length z))))
+                       (if (< d 0.001) 0.001 d))))
+      (setf dx (* dx movement-speed))
+      (dolly cam (rtg-math:v! dx dx))
+      (update cam))))
+
+(defun pan (cam delta)
+  (with-slots (camera-position center-position up-vector mode) cam
+    (let* ((z (rtg-math.vector3:- center-position camera-position))
+           (distance (/ (rtg-math.vector3:length z) 0.785))
+           (z (rtg-math.vector3:normalize z))
+           (x (rtg-math.vector3:normalize (rtg-math.vector3:cross up-vector z)))
+           (y (rtg-math.vector3:normalize (rtg-math.vector3:cross z x))))
+      (setf x (rtg-math.vector3:*s x (* distance (- (aref delta 0))))
+            y (rtg-math.vector3:*s y (* distance (aref delta 1))))
+      (when (eq mode :fly)
+        (setf x (rtg-math.vector3:- x)
+              y (rtg-math.vector3:- y)))
+      (setf camera-position (rtg-math.vector3:+ camera-position x y)
+            center-position (rtg-math.vector3:+ center-position x y)))))
+
+(defun trackball (cam position)
+  (let ((trackball-size 0.8))
+    (flet ((project-onto-tb-sphere (p)
+             (let ((d (rtg-math.vector2:length p)))
+               (if (< d (* trackball-size 0.70710678118654752440))
+                   (sqrt (- (* trackball-size trackball-size) (* d d)))
+                   (/ (expt (/ trackball-size 1.41421356237309504880) 2) d)))))
+      (with-slots (camera-position center-position mouse-position window-size matrix up-vector) cam
+        (let* ((p0 (rtg-math:v! (float (* 2.0 (/ (- (rtg-math:x mouse-position) (/ (rtg-math:x window-size) 2.0))
+                                                 (rtg-math:x window-size))))
+                                (float (* 2.0 (/ (- (/ (rtg-math:y window-size) 2.0) (rtg-math:y mouse-position))
+                                                 (rtg-math:y window-size))))))
+               (p1 (rtg-math:v! (float (* 2.0 (/ (- (rtg-math:x position) (/ (rtg-math:x window-size) 2.0))
+                                                 (rtg-math:x window-size))))
+                                (float (* 2.0 (/ (- (/ (rtg-math:y window-size) 2.0) (rtg-math:y position))
+                                                 (rtg-math:y window-size))))))
+               (ptb0 (rtg-math:v! (rtg-math:x p0) (rtg-math:y p0) (project-onto-tb-sphere p0)))
+               (ptb1 (rtg-math:v! (rtg-math:x p1) (rtg-math:y p1) (project-onto-tb-sphere p1)))
+               (axis (rtg-math.vector3:normalize (rtg-math.vector3:cross ptb0 ptb1)))
+               (s (let ((s (rtg-math.vector3:length (rtg-math.vector3:/s (rtg-math.vector3:- ptb0 ptb1)
+                                                                         (* 2.0 trackball-size)))))
+                    (cond ((> s 1.0) 1.0)
+                          ((< s -1.0) -1.0)
+                          (t s))))
+               (rad (* 2.0 (asin s)))
+               (rot-axis (rtg-math.matrix4:*v3 matrix axis))
+               (rot-mat (rtg-math.matrix4:rotation-from-axis-angle rot-axis rad))
+               (pnt (rtg-math.vector3:- camera-position center-position))
+               (pnt2 (rtg-math.matrix4:*v3 rot-mat pnt))
+               (up2 (rtg-math.matrix4:*v3 rot-mat up-vector)))
+          (setf camera-position (rtg-math.vector3:+ center-position pnt2)
+                up-vector up2))))))
 
 (defun motion (cam position action)
   (with-slots (mouse-position window-size mode) cam
@@ -295,18 +370,30 @@ void main()
         ((eq :look-around action)
          (if (eq :trackball mode)
              (trackball cam position)
-             (orbit cam (rtg-math:v! (aref 0 delta) (- (aref 1 delta))) t))))
+             (orbit cam (rtg-math:v! (aref delta 0) (- (aref delta 1))) t))))
       (update cam)
       (setf mouse-position position))))
 
 (defun mouse-move (cam position mouse-button modifiers)
-  (let ((current-action (cond
-                          ((eq :left mouse-button)
-                           :orbit)
-                          ((eq :right mouse-button)
-                           :orbit)
-                          (t :orbit))))
-    (motion cam position current-action)))
+  (with-slots (mode) cam
+    (let ((current-action
+            (if (eq :left mouse-button)
+                (cond
+                  ((or (and (member :ctrl modifiers)
+                            (member :shift modifiers))
+                       (member :alt modifiers))
+                   (if (eq mode :examine)
+                         :orbit
+                         :look-around))
+                  ((member :shift modifiers)
+                   :dolly)
+                  ((member :ctrl modifiers)
+                   :pan)
+                  (t (if (eq mode :examine)
+                         :orbit
+                         :look-around)))
+                :orbit)))
+      (motion cam position current-action))))
 
 (defmethod initialize-instance :after ((cam camera-manipulator) &key)
   (update cam))
@@ -952,7 +1039,15 @@ void main()
           ((member key '(:escape :q))
            (glfw:set-window-should-close))
           ((eq key :r)
-           (setf use-raster-render (not use-raster-render))))))
+           (setf use-raster-render (not use-raster-render)))
+          ((eq key :m)
+           (let ((modes '(:walk
+                          :trackball
+                          :fly
+                          :examine)))
+             (setf (mode camera-manipulator)
+                   (nth (mod (1+ (position (mode camera-manipulator) modes)) (length modes))
+                        modes)))))))
     (glfw:def-cursor-pos-callback cursor-pos-callback (window x y)
       (let ((mouse-button (cond
                             ((eq :press (glfw:get-mouse-button :left window)) :left)
@@ -960,11 +1055,24 @@ void main()
                             (t nil)))
             (modifiers nil))
         (when mouse-button
-          ;; todo: modifiers
+          (when (eq (glfw:get-key :left-alt) :press)
+            (push :alt modifiers))
+          (when (eq (glfw:get-key :left-control) :press)
+            (push :ctrl modifiers))
+          (when (eq (glfw:get-key :left-shift) :press)
+            (push :shift modifiers))
           (mouse-move camera-manipulator (rtg-math:v!int (floor x) (floor y)) mouse-button modifiers))))
     (glfw:def-framebuffer-size-callback framebuffer-resize-callback (window w h)
       (declare (ignore window))
       (setf (window-size camera-manipulator) (rtg-math:v!int w h)))
+    (glfw:def-mouse-button-callback mouse-button-callback (window button action mods)
+      (declare (ignore window button action mods))
+      (let ((pos (glfw:get-cursor-position)))
+        (setf (mouse-position camera-manipulator)
+              (rtg-math:v!int (floor (first pos)) (floor (second pos))))))
+    (glfw:def-scroll-callback scroll-callback (window x y)
+      (declare (ignore window x))
+      (wheel camera-manipulator (float y)))
     
     (glfw:with-init-window (:title app-name
                             :width window-width
@@ -973,6 +1081,8 @@ void main()
       
       (glfw:set-key-callback 'key-callback)
       (glfw:set-cursor-position-callback 'cursor-pos-callback)
+      (glfw:set-mouse-button-callback 'mouse-button-callback)
+      (glfw:set-scroll-callback 'scroll-callback)
       
       (with-instance (instance
                       :app-name app-name
@@ -1293,16 +1403,14 @@ void main()
                                       (vk:make-clear-value
                                        :depth-stencil (vk:make-clear-depth-stencil-value
                                                        :depth 1.0
-                                                       :stencil 0)))))
-                  ;; use this for khr raytracing:
-                  ;; https://github.com/KhronosGroup/Vulkan-Samples/blob/master/samples/extensions/raytracing_basic/raytracing_basic.cpp
+                                                       :stencil 0))))
+                       (framebuffers (make-framebuffers device
+                                                        render-pass
+                                                        (image-views swapchain-data)
+                                                        (image-view depth-buffer-data)
+                                                        window-extent)))
                   (unwind-protect
-                       (with-framebuffers (framebuffers
-                                           device
-                                           render-pass
-                                           (image-views swapchain-data)
-                                           (image-view depth-buffer-data)
-                                           window-extent)
+                       (progn
                          (update-descriptor-sets device
                                                  descriptor-set
                                                  (list
@@ -1342,6 +1450,37 @@ void main()
                                (glfw:poll-events)
 
                                ;; todo: handle window resize
+                               (let ((window-size (glfw:get-window-size)))
+                                 (when (or (not (= (first window-size)
+                                                   (vk:width window-extent)))
+                                           (not (= (second window-size)
+                                                   (vk:height window-extent))))
+                                   (setf (vk:width window-extent) (first window-size)
+                                         (vk:height window-extent) (second window-size))
+                                   (vk:device-wait-idle device)
+                                   (let ((new-swapchain-data (make-swapchain-data physical-device
+                                                                                  device
+                                                                                  surface
+                                                                                  window-extent
+                                                                                  '(:color-attachment :storage)
+                                                                                  (swapchain swapchain-data)
+                                                                                  graphics-queue-index
+                                                                                  present-queue-index))
+                                         (new-depth-buffer (make-depth-buffer-data physical-device
+                                                                                   device
+                                                                                   depth-format
+                                                                                   window-extent)))
+                                     (clear-handle-data device swapchain-data)
+                                     (clear-handle-data device depth-buffer-data)
+                                     (setf swapchain-data new-swapchain-data)
+                                     (setf depth-buffer-data new-depth-buffer))
+                                   (loop for framebuffer in framebuffers
+                                         do (vk:destroy-framebuffer device framebuffer))
+                                   (setf framebuffers (make-framebuffers device
+                                                                         render-pass
+                                                                         (image-views swapchain-data)
+                                                                         (image-view depth-buffer-data)
+                                                                         window-extent))))
 
                                ;; update uniform-buffer-object
                                (setf (view uniform-buffer-object) (matrix camera-manipulator))
@@ -1360,140 +1499,149 @@ void main()
                                                '(:struct uniform-buffer-object))
 
                                ;; frame begin
-                               (let ((back-buffer-index (vk:acquire-next-image-khr device
-                                                                                   (swapchain swapchain-data)
-                                                                                   +uint64-max+
-                                                                                   (present-complete-semaphore current-frame-data))))
-                                 (loop while (eq :timeout (vk:wait-for-fences device (list (fence current-frame-data)) t +fence-timeout+)))
-                                 (vk:reset-fences device (list (fence current-frame-data)))
+                               (handler-case
+                                   (let ((back-buffer-index (vk:acquire-next-image-khr device
+                                                                                       (swapchain swapchain-data)
+                                                                                       +uint64-max+
+                                                                                       (present-complete-semaphore current-frame-data))))
+                                     (loop while (eq :timeout (vk:wait-for-fences device (list (fence current-frame-data)) t +fence-timeout+)))
+                                     (vk:reset-fences device (list (fence current-frame-data)))
 
-                                 (vk:begin-command-buffer command-buffer (vk:make-command-buffer-begin-info :flags '(:one-time-submit)))
-                                 (if use-raster-render
-                                     (progn
-                                       (vk:cmd-begin-render-pass command-buffer
-                                                                 (vk:make-render-pass-begin-info
-                                                                  :render-pass render-pass
-                                                                  :framebuffer (nth back-buffer-index framebuffers)
-                                                                  :render-area (vk:make-rect-2d
-                                                                                :offset (vk:make-offset-2d :x 0 :y 0)
-                                                                                :extent window-extent)
-                                                                  :clear-values clear-values)
-                                                                 :inline)
-                                       (vk:cmd-bind-pipeline command-buffer :graphics graphics-pipeline)
-                                       (vk:cmd-bind-descriptor-sets command-buffer :graphics pipeline-layout 0 (list descriptor-set) nil)
-                                       (vk:cmd-set-viewport command-buffer
-                                                            0
-                                                            (list
-                                                             (vk:make-viewport
-                                                              :x 0.0
-                                                              :y 0.0
-                                                              :width (float (vk:width window-extent))
-                                                              :height (float (vk:height window-extent))
-                                                              :min-depth 0.0
-                                                              :max-depth 1.0)))
-                                       (vk:cmd-set-scissor command-buffer
-                                                           0
-                                                           (list
-                                                            (vk:make-rect-2d
-                                                             :offset (vk:make-offset-2d :x 0 :y 0)
-                                                             :extent window-extent)))
-                                       (vk:cmd-bind-vertex-buffers command-buffer
-                                                                   0
-                                                                   (list (buffer vertex-buffer-data))
-                                                                   '(0))
-                                       (vk:cmd-bind-index-buffer command-buffer
-                                                                 (buffer vertex-index-buffer-data)
-                                                                 0
-                                                                 :uint32)
-                                       (vk:cmd-draw-indexed command-buffer
-                                                            num-vertices
-                                                            1
-                                                            0
-                                                            0
-                                                            0)
-                                       (vk:cmd-end-render-pass command-buffer))
-                                     (progn
-                                       (vk:update-descriptor-sets device
-                                                                  (list (vk:make-write-descriptor-set
-                                                                         :dst-set (nth back-buffer-index ray-tracing-descriptor-sets)
-                                                                         :dst-binding 1
-                                                                         :dst-array-element 0
-                                                                         :descriptor-type (vk:descriptor-type (second bindings))
-                                                                         :image-info (list (vk:make-descriptor-image-info
-                                                                                            :sampler nil
-                                                                                            :image-view (nth back-buffer-index (image-views swapchain-data))
-                                                                                            :image-layout :general))))
-                                                                  nil)
-                                       (set-image-layout command-buffer
-                                                         (nth back-buffer-index (images swapchain-data))
-                                                         color-format
-                                                         :undefined
-                                                         :general)
-                                       (vk:cmd-bind-pipeline command-buffer
-                                                             :ray-tracing-khr
-                                                             ray-tracing-pipeline)
-                                       (vk:cmd-bind-descriptor-sets command-buffer
-                                                                    :ray-tracing-khr
-                                                                    ray-tracing-pipeline-layout
-                                                                    0
-                                                                    (list (nth back-buffer-index ray-tracing-descriptor-sets))
-                                                                    nil)
-                                       (vk:cmd-trace-rays-khr command-buffer
-                                                              (vk:make-strided-device-address-region-khr
-                                                               :device-address (vk:device-address
-                                                                                (get-buffer-device-address device raygen-shader-binding-table))
-                                                               :stride handle-size-aligned
-                                                               :size handle-size-aligned)
-                                                              (vk:make-strided-device-address-region-khr
-                                                               :device-address (vk:device-address
-                                                                                (get-buffer-device-address device miss-shader-binding-table))
-                                                               :stride handle-size-aligned
-                                                               :size (* 2 handle-size-aligned))
-                                                              (vk:make-strided-device-address-region-khr
-                                                               :device-address (vk:device-address
-                                                                                (get-buffer-device-address device hit-shader-binding-table))
-                                                               :stride handle-size-aligned
-                                                               :size (* 2 handle-size-aligned))
-                                                              (vk:make-strided-device-address-region-khr
-                                                               :device-address 0
-                                                               :stride 0
-                                                               :size 0)
-                                                              (vk:width window-extent)
-                                                              (vk:height window-extent)
-                                                              1)
-                                       (set-image-layout command-buffer
-                                                         (nth back-buffer-index (images swapchain-data))
-                                                         color-format
-                                                         :general
-                                                         :present-src-khr)))
-                                 (vk:end-command-buffer command-buffer)
-                                 (vk:queue-submit graphics-queue
-                                                  (list
-                                                   (vk:make-submit-info
-                                                    :wait-semaphores (list (present-complete-semaphore current-frame-data))
-                                                    :wait-dst-stage-mask '(:color-attachment-output)
-                                                    :command-buffers (list command-buffer)
-                                                    :signal-semaphores (list (render-complete-semaphore current-frame-data))))
-                                                  (fence current-frame-data))
-                                 (vk:queue-present-khr present-queue
-                                                       (vk:make-present-info-khr
-                                                        :wait-semaphores (list (render-complete-semaphore current-frame-data))
-                                                        :swapchains (list (swapchain swapchain-data))
-                                                        :image-indices (list back-buffer-index))))
+                                     (vk:begin-command-buffer command-buffer (vk:make-command-buffer-begin-info :flags '(:one-time-submit)))
+                                     (if use-raster-render
+                                         (progn
+                                           (vk:cmd-begin-render-pass command-buffer
+                                                                     (vk:make-render-pass-begin-info
+                                                                      :render-pass render-pass
+                                                                      :framebuffer (nth back-buffer-index framebuffers)
+                                                                      :render-area (vk:make-rect-2d
+                                                                                    :offset (vk:make-offset-2d :x 0 :y 0)
+                                                                                    :extent window-extent)
+                                                                      :clear-values clear-values)
+                                                                     :inline)
+                                           (vk:cmd-bind-pipeline command-buffer :graphics graphics-pipeline)
+                                           (vk:cmd-bind-descriptor-sets command-buffer :graphics pipeline-layout 0 (list descriptor-set) nil)
+                                           (vk:cmd-set-viewport command-buffer
+                                                                0
+                                                                (list
+                                                                 (vk:make-viewport
+                                                                  :x 0.0
+                                                                  :y 0.0
+                                                                  :width (float (vk:width window-extent))
+                                                                  :height (float (vk:height window-extent))
+                                                                  :min-depth 0.0
+                                                                  :max-depth 1.0)))
+                                           (vk:cmd-set-scissor command-buffer
+                                                               0
+                                                               (list
+                                                                (vk:make-rect-2d
+                                                                 :offset (vk:make-offset-2d :x 0 :y 0)
+                                                                 :extent window-extent)))
+                                           (vk:cmd-bind-vertex-buffers command-buffer
+                                                                       0
+                                                                       (list (buffer vertex-buffer-data))
+                                                                       '(0))
+                                           (vk:cmd-bind-index-buffer command-buffer
+                                                                     (buffer vertex-index-buffer-data)
+                                                                     0
+                                                                     :uint32)
+                                           (vk:cmd-draw-indexed command-buffer
+                                                                num-vertices
+                                                                1
+                                                                0
+                                                                0
+                                                                0)
+                                           (vk:cmd-end-render-pass command-buffer))
+                                         (progn
+                                           (vk:update-descriptor-sets device
+                                                                      (list (vk:make-write-descriptor-set
+                                                                             :dst-set (nth back-buffer-index ray-tracing-descriptor-sets)
+                                                                             :dst-binding 1
+                                                                             :dst-array-element 0
+                                                                             :descriptor-type (vk:descriptor-type (second bindings))
+                                                                             :image-info (list (vk:make-descriptor-image-info
+                                                                                                :sampler nil
+                                                                                                :image-view (nth back-buffer-index (image-views swapchain-data))
+                                                                                                :image-layout :general))))
+                                                                      nil)
+                                           (set-image-layout command-buffer
+                                                             (nth back-buffer-index (images swapchain-data))
+                                                             color-format
+                                                             :undefined
+                                                             :general)
+                                           (vk:cmd-bind-pipeline command-buffer
+                                                                 :ray-tracing-khr
+                                                                 ray-tracing-pipeline)
+                                           (vk:cmd-bind-descriptor-sets command-buffer
+                                                                        :ray-tracing-khr
+                                                                        ray-tracing-pipeline-layout
+                                                                        0
+                                                                        (list (nth back-buffer-index ray-tracing-descriptor-sets))
+                                                                        nil)
+                                           (vk:cmd-trace-rays-khr command-buffer
+                                                                  (vk:make-strided-device-address-region-khr
+                                                                   :device-address (vk:device-address
+                                                                                    (get-buffer-device-address device raygen-shader-binding-table))
+                                                                   :stride handle-size-aligned
+                                                                   :size handle-size-aligned)
+                                                                  (vk:make-strided-device-address-region-khr
+                                                                   :device-address (vk:device-address
+                                                                                    (get-buffer-device-address device miss-shader-binding-table))
+                                                                   :stride handle-size-aligned
+                                                                   :size (* 2 handle-size-aligned))
+                                                                  (vk:make-strided-device-address-region-khr
+                                                                   :device-address (vk:device-address
+                                                                                    (get-buffer-device-address device hit-shader-binding-table))
+                                                                   :stride handle-size-aligned
+                                                                   :size (* 2 handle-size-aligned))
+                                                                  (vk:make-strided-device-address-region-khr
+                                                                   :device-address 0
+                                                                   :stride 0
+                                                                   :size 0)
+                                                                  (vk:width window-extent)
+                                                                  (vk:height window-extent)
+                                                                  1)
+                                           (set-image-layout command-buffer
+                                                             (nth back-buffer-index (images swapchain-data))
+                                                             color-format
+                                                             :general
+                                                             :present-src-khr)))
+                                     (vk:end-command-buffer command-buffer)
+                                     (vk:queue-submit graphics-queue
+                                                      (list
+                                                       (vk:make-submit-info
+                                                        :wait-semaphores (list (present-complete-semaphore current-frame-data))
+                                                        :wait-dst-stage-mask '(:color-attachment-output)
+                                                        :command-buffers (list command-buffer)
+                                                        :signal-semaphores (list (render-complete-semaphore current-frame-data))))
+                                                      (fence current-frame-data))
+                                     (vk:queue-present-khr present-queue
+                                                           (vk:make-present-info-khr
+                                                            :wait-semaphores (list (render-complete-semaphore current-frame-data))
+                                                            :swapchains (list (swapchain swapchain-data))
+                                                            :image-indices (list back-buffer-index))))
+                                 (vk-error:error-out-of-date-khr (c)
+                                   ;; we just ignore this
+                                   )
+                                 (t (c)
+                                   (format t "Caught error: ~a~%" c)))
 
                                ;; prepare next iteration
                                (setf accumulated-time (+ accumulated-time (- (glfw:get-time) start-time)))
                                (incf frame-count)
                                (when (< 1.0 accumulated-time)
                                  (glfw:set-window-title
-                                  (format nil "~a: ~a Vertices ~:[RayTracing~;Rasterizing~] (~5$ fps)~%"
+                                  (format nil "~a: ~a Vertices ~:[RayTracing~;Rasterizing~] (~5$ fps) - Camera mode: ~a~%"
                                           app-name
                                           num-vertices
                                           use-raster-render
-                                          (float (/ frame-count accumulated-time))))
+                                          (float (/ frame-count accumulated-time))
+                                          (mode camera-manipulator)))
                                  (setf accumulated-time 0.0)
                                  (setf frame-count 0)))
                          (vk:device-wait-idle device))
+                    (loop for framebuffer in framebuffers
+                          do (vk:destroy-framebuffer device framebuffer))
                     (clear-handle-data device raygen-shader-binding-table)
                     (clear-handle-data device miss-shader-binding-table)
                     (clear-handle-data device hit-shader-binding-table)

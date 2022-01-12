@@ -383,8 +383,8 @@ void main()
                             (member :shift modifiers))
                        (member :alt modifiers))
                    (if (eq mode :examine)
-                         :orbit
-                         :look-around))
+                       :orbit
+                       :look-around))
                   ((member :shift modifiers)
                    :dolly)
                   ((member :ctrl modifiers)

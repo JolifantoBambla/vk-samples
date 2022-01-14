@@ -1449,7 +1449,7 @@ void main()
                                while (not (glfw:window-should-close-p)) do
                                (glfw:poll-events)
 
-                               ;; todo: handle window resize
+                               ;; handle window resize
                                (let ((window-size (glfw:get-window-size)))
                                  (when (or (not (= (first window-size)
                                                    (vk:width window-extent)))
@@ -1621,7 +1621,7 @@ void main()
                                                             :swapchains (list (swapchain swapchain-data))
                                                             :image-indices (list back-buffer-index))))
                                  (vk-error:error-out-of-date-khr (c)
-                                   ;; we just ignore this
+                                   ;; this is thrown when the window size changes - we simply ignore this
                                    )
                                  (t (c)
                                    (format t "Caught error: ~a~%" c)))

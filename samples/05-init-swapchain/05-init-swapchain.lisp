@@ -27,7 +27,11 @@
       (unwind-protect
            ;; first we'll create a surface - the Vulkan API does not provide a function for this though
            ;; so we have to create this via glfw
-           (let* ((surface (glfw:create-window-surface instance glfw:*window* vk:*default-allocator*)))
+           ;; handles are wrapped in vk but glfw expects a raw pointer
+           ;; vk:raw-handle gets us the raw pointer
+           ;; vk-make-surface-khr-wrapper wraps the raw pointer we get back from glfw so that we can use it in a vk context
+           (let* ((surface (vk:make-surface-khr-wrapper
+                            (glfw:create-window-surface (vk:raw-handle instance) glfw:*window* vk:*default-allocator*))))
              (unwind-protect
                   (let* ((physical-device (first (vk:enumerate-physical-devices instance)))
                          (queue-family-properties (vk:get-physical-device-queue-family-properties physical-device))

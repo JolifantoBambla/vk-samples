@@ -4,7 +4,7 @@
 
 (defparameter *vk-validation-layer-name* "VK_LAYER_KHRONOS_validation")
 
-(defparameter *api-version* (vk:make-api-version 1 2 153))
+(defparameter *api-version* vk:+header-version-complete+)
 
 (defparameter *fence-timeout* 100000000)
 
@@ -297,7 +297,8 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
              (progn ,@body)))))
 
 (defmacro with-surface ((surface instance) &body body)
-  `(let ((,surface (glfw:create-window-surface ,instance glfw:*window* vk:*default-allocator*)))
+  `(let ((,surface (vk:make-surface-khr-wrapper
+                    (glfw:create-window-surface (vk:raw-handle ,instance) glfw:*window* vk:*default-allocator*))))
      (unwind-protect
           (progn ,@body)
        (vk:destroy-surface-khr ,instance ,surface))))

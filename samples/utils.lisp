@@ -543,8 +543,7 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                         :layers 1))))
 
 (defmacro with-framebuffers ((framebuffers device render-pass swapchain-image-views depth-image-view swapchain-extent) &body body)
-  (let ((swapchain-image-view (gensym "SWAP-CHAIN-IMAGE-VIEW"))
-        (framebuffer (gensym "FRAME-BUFFER")))
+  (let ((framebuffer (gensym "FRAME-BUFFER")))
     `(let ((,framebuffers (make-framebuffers ,device ,render-pass ,swapchain-image-views ,depth-image-view ,swapchain-extent)))
        (unwind-protect
             (progn ,@body)
@@ -916,6 +915,7 @@ DATA-TYPE - a foreign CFFI type corresponding to DATA's type."
                                  depth-buffered
                                  pipeline-layout
                                  render-pass)
+  (declare (ignore pipeline-cache))
   (let* ((vertex-input-attribute-descriptions (when (< 0 vertex-stride)
                                                 (loop for offset in vertex-input-attribute-offset
                                                       for i from 0

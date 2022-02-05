@@ -1043,7 +1043,7 @@ void main()
                           :fly
                           :examine)))
              (setf (mode camera-manipulator)
-                   (nth (mod (1+ (position (mode camera-manipulator) modes)) (length modes))
+                   (nth (mod (1+ (or (position (mode camera-manipulator) modes) 0)) (length modes))
                         modes)))))))
     (glfw:def-cursor-pos-callback cursor-pos-callback (window x y)
       (let ((mouse-button (cond

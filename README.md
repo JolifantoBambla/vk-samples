@@ -19,7 +19,7 @@ Some of the samples might also work on MacOS, but currently it is not guaranteed
 #### Not on Quicklisp (yet)
 All of the following dependencies can be loaded via Quicklisp when they are cloned to one of your `ql:*local-project-directories*`.
 
-* [vk](https://github.com/JolifantoBambla/vk): The current version of `vk-samples` uses features that will be on Quicklisp in the next update (current version is `quicklisp-2021-08-07`).
+* [vk](https://github.com/JolifantoBambla/vk): The current version of `vk-samples` uses features that will be on Quicklisp in the next update (version `3.0.0-v1.2.198`).
 * [shaderc](https://github.com/JolifantoBambla/shadercl)
 * [varjo](https://github.com/JolifantoBambla/varjo): this is my fork of Varjo, which adds Vulkan support and is not merged into the original repo (yet?).
 

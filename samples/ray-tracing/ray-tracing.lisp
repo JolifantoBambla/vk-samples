@@ -298,10 +298,7 @@ void main()
 
 (defun wheel (cam value)
   (with-slots (camera-position center-position window-size movement-speed) cam
-    (let* ((dx (/ (* value (abs value)) (rtg-math:x window-size)))
-           (z (rtg-math.vector3:- center-position camera-position))
-           (distance (let ((d (* 0.1 (rtg-math.vector3:length z))))
-                       (if (< d 0.001) 0.001 d))))
+    (let* ((dx (/ (* value (abs value)) (rtg-math:x window-size))))
       (setf dx (* dx movement-speed))
       (dolly cam (rtg-math:v! dx dx))
       (update cam))))
@@ -1364,9 +1361,7 @@ void main()
                        (ray-tracing-pipeline-properties (vk:next (vk:get-physical-device-properties-2
                                                                   physical-device
                                                                   (vk:make-physical-device-properties-2
-                                                                   :next (vk:make-physical-device-ray-tracing-pipeline-properties-khr)
-                                                                   ;; todo: this should not have to be explicitly set
-                                                                   :properties (vk:get-physical-device-properties physical-device)))))
+                                                                   :next (vk:make-physical-device-ray-tracing-pipeline-properties-khr)))))
                        (handle-size (vk:shader-group-handle-size ray-tracing-pipeline-properties))
                        (handle-alignment (vk:shader-group-handle-alignment ray-tracing-pipeline-properties))
                        (handle-size-aligned (round-up handle-size handle-alignment))
@@ -1620,7 +1615,7 @@ void main()
                                                             :wait-semaphores (list (render-complete-semaphore current-frame-data))
                                                             :swapchains (list (swapchain swapchain-data))
                                                             :image-indices (list back-buffer-index))))
-                                 (vk-error:error-out-of-date-khr (c)
+                                 (vk-error:error-out-of-date-khr ()
                                    ;; this is thrown when the window size changes - we simply ignore this
                                    )
                                  (t (c)

@@ -12,6 +12,7 @@
    #:make-default-application-info
    #:make-default-debug-utils-messenger-create-info
    #:make-default-render-pass-begin-info
+   #:make-default-queue-create-infos
    #:with-instance
    #:with-device
    #:with-instance-and-device
@@ -21,7 +22,7 @@
    #:with-render-pass
    #:with-shader-module
    #:with-compiled-shader-module
-   #:with-frame-buffers
+   #:with-framebuffers
    #:with-command-pool
    #:with-command-buffer
    #:record-command-buffer
@@ -41,8 +42,45 @@
    #:find-graphics-and-present-queue-family-indices
    #:determine-swapchain-extent
    #:pick-color-format
+   #:pick-depth-format
+   #:create-render-pass
    #:define-debug-utils-messenger-callback
-   #:default-debug-utils-log-callback))
+   #:default-debug-utils-log-callback
+   #:create-graphics-pipeline
+   #:update-descriptor-sets
+   #:swapchain-data
+   #:color-format
+   #:images
+   #:swapchain
+   #:image-views
+   #:image-data
+   #:img-format
+   #:image
+   #:device-memory
+   #:image-view
+   #:buffer-data
+   #:buffer
+   #:device-memory
+   #:texture-data
+   #:tex-format
+   #:extent
+   #:needs-staging-p
+   #:staging-buffer-data
+   #:sampler
+   #:clear-handle-data
+   #:make-swapchain-data
+   #:allocated-device-memory
+   #:make-framebuffers
+   #:make-image-data
+   #:make-depth-buffer-data
+   #:make-buffer-data
+   #:make-texture-data
+   #:set-image-layout
+   #:set-texture-image
+   #:push-flag
+   #:one-time-submit
+   #:copy-to-buffer
+   #:checkerboard-image-generator))
 
 (defpackage #:vk-samples/data
   (:use #:cl)
@@ -191,6 +229,14 @@
   (:export
    #:use-vari-shaders))
 
+(defpackage #:vk-samples/ray-tracing
+  (:documentation "Shows how to construct a ray tracing pipeline using the VK_KHR_ray_tracing extension.")
+   (:use #:cl
+         #:vk-samples/utils
+         #:vk-samples/data)
+  (:export
+   #:ray-tracing))
+
 (defpackage #:vk-samples
   (:documentation "Usage samples for the Vulkan bindings provided by VK.")
   (:use #:cl)
@@ -232,6 +278,8 @@
                 #:compile-shaders-from-repl)
   (:import-from #:vk-samples/use-vari-shaders
                 #:use-vari-shaders)
+  (:import-from #:vk-samples/ray-tracing
+                #:ray-tracing)
   (:export
    #:01-init-instance
    #:02-enumerate-devices
@@ -252,4 +300,5 @@
    #:create-debug-utils-messenger-next
    #:compile-shaders-from-repl
    #:use-vari-shaders
+   #:ray-tracing
    #:run-all-samples))

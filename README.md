@@ -30,7 +30,7 @@ All of the following dependencies can be loaded via Quicklisp when they are clon
 
 ## Samples
 The following table shows all currently available samples.
-You can either run them individually (e.g. `(vk-samples:01-init-instance)`) or run all of them using `(vk-samples:run-all-samples)`.
+You can either run them individually (e.g. `(vk-samples:01-init-instance)`) or run all of them except for `ray-tracing` using `(vk-samples:run-all-samples)`.
 As with the original [VulkanSamples by LunarG](https://github.com/LunarG/VulkanSamples) all samples prefixed with a number represent the progression from initializing a Vulkan instance to drawing a cube on screen.
 For the most part the things shown in the samples have also been refactored into the package `vk-samples/utils`, so later
 sample don't repeat too much from the earlier samples.
@@ -56,7 +56,16 @@ sample don't repeat too much from the earlier samples.
 | create-debug-utils-messenger-next | Shows how to use the `NEXT` slot of a `VK:INSTANCE-CREATE-INFO` to create and destroy a debug callback alongside a Vulkan instance. |
 | compile-shaders-from-repl | This is the same as 15-draw-cube, but it compiles the shaders at runtime using `shaderc`. |
 | compile-shaders-from-repl | This is the same as compile-shaders-from-repl, but the shaders are written in [Vari](https://github.com/cbaggers/varjo). The shaders are slightly different, because the earliest GLSL version Varjo can produce shaders targeted at Vulkan (i.e. SPIR-V compilation) for. |
+| ray-tracing | Shows how to use the `Vk_KHR_ray_tracing` extension. This sample is not run by `run-all-samples`. |
 
+### Ray Tracing Sample
+Run `(vk-samples:ray-tracing)` to start the sample. Note that `VK_KHR_ray_tracing` needs to be supported on the device.
+In contrast to all other samples, this sample starts an infinite loop that has to be terminated by the user by closing the window, or by pressing **Q** or **ESCAPE**.
+The sample renderes a bunch of textured cubes using ray tracing or standard rasterization.
+Pressing **R** switches the rendering pipeline used.
+When using the ray tracing pipeline, shadows are computed using secondary rays.
+The camera can be moved by pressing the left or right mouse button while moving the mouse or by using the scroll wheel.
+Use **M** to cycle through camera modes and **CTRL**, **SHIFT**, and **ALT** while moving to change the movement type. 
 
 ## Acknowledgements
 The samples in this repository closely follows the [VulkanSamples by LunarG](https://github.com/LunarG/VulkanSamples) as well as the samples for [Vulkan-Hpp](https://github.com/KhronosGroup/Vulkan-Hpp).

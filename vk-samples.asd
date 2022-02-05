@@ -55,5 +55,7 @@
                              (:module "compile-shaders-from-repl"
                               :components ((:file "compile-shaders-from-repl")))
                              (:module "use-vari-shaders"
-                              :components ((:file "use-vari-shaders")))))
+                              :components ((:file "use-vari-shaders")))
+                             (:module "ray-tracing"
+                              :components ((:file "ray-tracing")))))
                (:file "vk-samples")))

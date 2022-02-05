@@ -9,11 +9,13 @@
 
 (cffi:defcallback debug-messenger-callback %vk:bool32 ((flags %vk:debug-utils-message-severity-flag-bits-ext)
                                                        (message-types %vk:debug-utils-message-type-flags-ext)
-					               (callback-data %vk:debug-utils-messenger-callback-data-ext)
+					               (callback-data (:pointer (:struct %vk:debug-utils-messenger-callback-data-ext)))
 					               (user-data :pointer))
   (debug-utils-messenger flags
                          message-types
-                         callback-data
+                         ;; we need to translate the callback data explicitly, because CFFI seems to only do that for us in a callback
+                         ;; when using a deprecated bare struct reference in the lambda list
+                         (cffi:mem-aref callback-data '(:struct %vk:debug-utils-messenger-callback-data-ext))
                          ;; the user data will be passed as a raw pointer in this example, the rest is translated automatically
                          user-data)
   ;; a debug callback MUST return VkFalse! (NIL will be translated to VkFalse automatically)
